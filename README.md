@@ -1,6 +1,6 @@
 # meshnet CNI
 
-meshnet-cni - a (K8s) CNI plugin to create arbitrary network topologies out of point-to-point links with the help of (koko)[https://github.com/redhat-nfvpe/koko]. Heavily inspired by [Ratchet-CNI](https://github.com/dougbtv/ratchet-cni), [kokonet](https://github.com/s1061123/kokonet) and [Multus](https://github.com/intel/multus-cni).
+meshnet-cni - a (K8s) CNI plugin to create arbitrary network topologies out of point-to-point links with the help of [koko](https://github.com/redhat-nfvpe/koko). Heavily inspired by [Ratchet-CNI](https://github.com/dougbtv/ratchet-cni), [kokonet](https://github.com/s1061123/kokonet) and [Multus](https://github.com/intel/multus-cni).
 
 ## Architecture
 The plugin consists of three main components:
