@@ -56,12 +56,12 @@ Below is the order of operation of the plugin from the perspective of kube-node-
 2. pod-1/pod-2 come up, local kubelet calls the `meshnet` binary for each pod to setup their networking
 3. meshnet binary `delegates` the ADD command to the "master" plugin specified in the CNI configuration file, which connectes the first, **eth0** interface
 4. meshnet binary updates the etcd cluster with pod's metadata (namespace filepath and primary IP address)
-5. meshnet binary retrieves the list of `links` and looks up peer pod's metadata in etcd to compares its own IP address to the primary IP address of each peer
+5. meshnet binary retrieves the list of `links` and looks up peer pod's metadata in etcd to compare its own IP address to the primary IP address of each peer
 6. If the peer is on the same node, it calls koko to setup a `veth` link between the two pods
 7. If the peer is on the remote node, it does two things:  
     7.1 It calls koko to setup a local `vxlan` link  
     7.2 It makes an `HTTP PUT` call to the remote node's meshnet daemon, specifying this link's metadata (e.g. VTEP IP and VNI)
-8. upon receipt of this information, remote node's `meshnetd` idepmotently updates the local vxlan link, i.e. it creates/updates a new/existing link or does nothing if the link attributes are correct.
+8. Upon receipt of this information, remote node's `meshnetd` idepmotently updates the local vxlan link, i.e. it creates a new link, updates the existing link if there's a change or does nothing if the link attributes are the same.
 
 
 ## Demo
@@ -87,7 +87,7 @@ export PATH="$HOME/.kubeadm-dind-cluster:$PATH"
 kubectl create -f utils/etcd.yml
 ```
 
-Build `meshnet`, `meshnetd` and copy them along with CNI configuration file to all mebers of the cluster. The scripts requires dockerhub username to be provided to push the `meshnetd` image
+Build `meshnet`, `meshnetd` and copy them along with the CNI configuration file to all mebers of the cluster. The scripts requires dockerhub username to be provided to push the `meshnetd` image
 
 ```
 ./build.sh <dockerhub_username>
