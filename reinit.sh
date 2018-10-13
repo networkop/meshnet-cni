@@ -6,7 +6,6 @@ export PATH="$HOME/.kubeadm-dind-cluster:$PATH"
 
 ./dind-cluster-v1.11.sh down
 ./dind-cluster-v1.11.sh up
-kubectl create -f etcd.yml
 
 kubectl taint nodes --all node-role.kubernetes.io/master-
 cd ../

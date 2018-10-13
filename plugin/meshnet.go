@@ -319,123 +319,115 @@ func cmdAdd(args *skel.CmdArgs) error {
 	defer cli.Close()
 	kv := clientv3.NewKV(cli)
 
-	// TODO: check a pod label to see if a pod needs to use my CNI plugin
-	if true {
-		// Initialise pod's metadata struct
-		localPod := &podMeta{
-			Name: string(cniArgs.K8S_POD_NAME),
-		}
+	// Initialise pod's metadata struct
+	localPod := &podMeta{
+		Name: string(cniArgs.K8S_POD_NAME),
+	}
 
-		// Marking pod as "alive" by setting its srcIP and NetNS
-		if err = localPod.setPodAlive(ctx, kv, args.Netns, srcIP); err != nil {
+	// Marking pod as "alive" by setting its srcIP and NetNS
+	if err = localPod.setPodAlive(ctx, kv, args.Netns, srcIP); err != nil {
+		return err
+	}
+
+	// Query etcd for this pod's metadata
+	if err = localPod.getPodMetadata(ctx, kv); err != nil {
+		return err
+	}
+
+	for _, link := range *localPod.Links { // Iterate over each link of the local pod
+
+		// Build koko's veth struct for local intf
+		myVeth, err := makeVeth(args.Netns, link.LocalIntf, link.LocalIP)
+		if err != nil {
 			return err
 		}
 
-		// Query etcd for this pod's metadata
-		if err = localPod.getPodMetadata(ctx, kv); err != nil {
+		// Initialising peer pod's metadata
+		peerPod := &podMeta{
+			Name: link.PeerPod,
+		}
+		if err = peerPod.getPodMetadata(ctx, kv); err != nil {
 			return err
 		}
 
-		for _, link := range *localPod.Links {
+		//log.Printf("Local Pod metadata: %+v", spew.Sdump(localPod))
+		//log.Printf("Peer Pod metadata: %+v", spew.Sdump(peerPod))
 
-			myVeth, err := makeVeth(args.Netns, link.LocalIntf, link.LocalIP)
-			if err != nil {
-				return err
-			}
+		// Going through several possible situations
+		if peerPod.isAlive() { // This means we're coming up AFTER our peer so things are pretty easy
 
-			// Initialising peer pod's metadata
-			peerPod := &podMeta{
-				Name: link.PeerPod,
-			}
+			log.Printf("Peer pod %s is alive", peerPod.Name)
 
-			if err = peerPod.getPodMetadata(ctx, kv); err != nil {
-				return err
-			}
+			if peerPod.SrcIP == localPod.SrcIP { // This means we're on the same host
 
-			//log.Printf("Local Pod metadata: %+v", spew.Sdump(localPod))
-			//log.Printf("Peer Pod metadata: %+v", spew.Sdump(peerPod))
+				log.Printf("%s and %s are on the same host", localPod.Name, peerPod.Name)
 
-			// Going through several possible situations
-			if peerPod.isAlive() {
+				// Creating koko's Veth struct for peer intf
+				peerVeth, err := makeVeth(peerPod.NetNS, link.PeerIntf, link.PeerIP)
+				if err != nil {
+					return err
+				}
 
-				log.Printf("Peer pod %s is alive", peerPod.Name)
+				// Checking if interface already exists
+				exists, _ := api.IsExistLinkInNS(myVeth.NsName, myVeth.LinkName)
+				if exists == true { // If it does, we don't need to do anything
+					log.Printf("Interface %s already exists in namespace (%s)",
+						myVeth.LinkName, myVeth.NsName)
+				} else { // if not, calling koko to create a one
 
-				// This means we're coming up after our peer so things are pretty easy
-				if peerPod.SrcIP == localPod.SrcIP {
-
-					// This means we're on the same host
-					log.Printf("%s and %s are on the same host", localPod.Name, peerPod.Name)
-
-					// Creating koko's Veth struct
-					peerVeth, err := makeVeth(peerPod.NetNS, link.PeerIntf, link.PeerIP)
-					if err != nil {
-						return err
-					}
-
-					// Checking if interface already exists and if not calling koko to create one
-					exists, _ := api.IsExistLinkInNS(myVeth.NsName, myVeth.LinkName)
-					if exists == true {
-						log.Printf("Interface %s already exists in namespace (%s)",
-							myVeth.LinkName, myVeth.NsName)
-					} else {
-						// Api call to koko create and connect Veth pair in netlink
-						if err = api.MakeVeth(*myVeth, *peerVeth); err != nil {
-							// instead of failing, just log the error and move on
-							log.Printf("Error when creating a VEth pair with koko: %s", err)
-							log.Printf("MY VETH STRUCT: %+v", spew.Sdump(myVeth))
-							log.Printf("PEER STRUCT: %+v", spew.Sdump(peerVeth))
-						}
-					}
-
-				} else {
-
-					// This means we're on different hosts
-					log.Printf("%s and %s are on different hosts", localPod.Name, peerPod.Name)
-
-					// Creating koko's Vxlan struct
-					vxlan := makeVxlan(srcIntf, peerPod.SrcIP, link.UID)
-					if err = api.MakeVxLan(*myVeth, *vxlan); err != nil {
-						return fmt.Errorf("Error when creating a Vxlan interface with koko: %s", err)
-					}
-
-					// Now we need to make an API call to update the remote VTEP to point to us
-					payload := agentPayload{
-						NetNS:    peerPod.NetNS,
-						LinkName: link.PeerIntf,
-						LinkIP:   link.PeerIP,
-						PeerVtep: localPod.SrcIP,
-						VNI:      link.UID + vxlanBase,
-					}
-					// Encode payload
-					jsonBytes, err := json.Marshal(payload)
-					if err != nil {
-						return err
-					}
-					// Build URL
-					port := getEnv("MESHNETD_PORT", defaultPort)
-					url := fmt.Sprintf("http://%s:%s/vtep", peerPod.SrcIP, port)
-					// Send Post request and catch any errors
-					if err = putRequest(url, bytes.NewBuffer(jsonBytes)); err != nil {
-						return err
+					if err = api.MakeVeth(*myVeth, *peerVeth); err != nil {
+						// instead of failing, just log the error and move on
+						// this is because two peers can come up and make this call at the same time
+						log.Printf("Error when creating a VEth pair with koko: %s", err)
+						log.Printf("MY VETH STRUCT: %+v", spew.Sdump(myVeth))
+						log.Printf("PEER STRUCT: %+v", spew.Sdump(peerVeth))
 					}
 				}
 
-			} else { // This means that our peer pod hasn't come up yet
-				// Since there's no way of telling if it's going to be on this host or another,
-				// the only option is to do nothing
-				// Assuming that peer POD will do all the plumbing when it comes up by calling a local agent
-				log.Printf("Peer pod %s isn't alive yet, continuing", peerPod.Name)
-				continue
+			} else { // This means we're on different hosts
+
+				log.Printf("%s and %s are on different hosts", localPod.Name, peerPod.Name)
+
+				// Creating koko's Vxlan struct
+				vxlan := makeVxlan(srcIntf, peerPod.SrcIP, link.UID)
+				if err = api.MakeVxLan(*myVeth, *vxlan); err != nil {
+					return fmt.Errorf("Error when creating a Vxlan interface with koko: %s", err)
+				}
+
+				// Now we need to make an API call to update the remote VTEP to point to us
+				payload := agentPayload{
+					NetNS:    peerPod.NetNS,
+					LinkName: link.PeerIntf,
+					LinkIP:   link.PeerIP,
+					PeerVtep: localPod.SrcIP,
+					VNI:      link.UID + vxlanBase,
+				}
+				// Encode payload
+				jsonBytes, err := json.Marshal(payload)
+				if err != nil {
+					return err
+				}
+				// Build URL
+				port := getEnv("MESHNETD_PORT", defaultPort)
+				url := fmt.Sprintf("http://%s:%s/vtep", peerPod.SrcIP, port)
+				// Send Post request and catch any errors
+				if err = putRequest(url, bytes.NewBuffer(jsonBytes)); err != nil {
+					return err
+				}
 			}
+
+		} else { // This means that our peer pod hasn't come up yet
+			// Since there's no way of telling if our peer is going to be on this host or another,
+			// the only option is to do nothing, assuming that the peer POD will do all the plumbing when it comes up
+			log.Printf("Peer pod %s isn't alive yet, continuing", peerPod.Name)
+			continue
 		}
-	} else {
-		// TODO: add a fallback to one of the standard CNI plugins, e.g flannel
 	}
 
 	return r.Print()
 }
 
-// Sends PUT request to remote daemon
+// Sends PUT request to remote meshnet daemon
 func putRequest(url string, data io.Reader) error {
 	client := &http.Client{}
 	req, err := http.NewRequest(http.MethodPut, url, data)
@@ -488,35 +480,33 @@ func cmdDel(args *skel.CmdArgs) error {
 	defer cli.Close()
 	kv := clientv3.NewKV(cli)
 
-	// TODO: check a pod label to see if a pod needs to use my CNI plugin
-	if true {
-		// Initialise pod's metadata struct
-		localPod := &podMeta{
-			Name: string(cniArgs.K8S_POD_NAME),
-		}
+	// Initialise local pod's metadata struct
+	localPod := &podMeta{
+		Name: string(cniArgs.K8S_POD_NAME),
+	}
 
-		// Query etcd for this pod's metadata
-		if err = localPod.getPodMetadata(ctx, kv); err != nil {
+	// Query etcd for local pod's metadata
+	if err = localPod.getPodMetadata(ctx, kv); err != nil {
+		return err
+	}
+
+	// By setting srcIP and NetNS to "" we're marking this POD as dead
+	if err = localPod.setPodAlive(ctx, kv, "", ""); err != nil {
+		return err
+	}
+
+	for _, link := range *localPod.Links { // Iterate over each link of the local pod
+
+		// Creating koko's Veth struct for local intf
+		myVeth, err := makeVeth(args.Netns, link.LocalIntf, link.LocalIP)
+		if err != nil {
 			return err
 		}
-		// By setting srcIP and NetNS to "" we're marking this POD as dead
-		if err = localPod.setPodAlive(ctx, kv, "", ""); err != nil {
-			return err
-		}
 
-		for _, link := range *localPod.Links {
-
-			// Creating koko's Veth struct
-			myVeth, err := makeVeth(args.Netns, link.LocalIntf, link.LocalIP)
-			if err != nil {
-				return err
-			}
-
-			// API call to koko to remove Veth link in netlink
-			if err = myVeth.RemoveVethLink(); err != nil {
-				// instead of failing, just log the error and move on
-				log.Printf("Error removing Veth link: ", err)
-			}
+		// API call to koko to remove local Veth link
+		if err = myVeth.RemoveVethLink(); err != nil {
+			// instead of failing, just log the error and move on
+			log.Printf("Error removing Veth link: ", err)
 		}
 	}
 

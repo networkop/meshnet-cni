@@ -9,7 +9,7 @@ spec:
   nodeSelector:
     kubernetes.io/hostname: kube-node-1
   containers: 
-    - image: 172.16.0.46:5000/alpine-host
+    - image: networkop/alpine-host
       name: my-host
       command:  ["/bin/sh", "-c", "sleep 2000000000000"]
       securityContext:
@@ -25,7 +25,7 @@ spec:
   nodeSelector:
     kubernetes.io/hostname: kube-node-1
   containers: 
-    - image: 172.16.0.46:5000/alpine-host
+    - image: networkop/alpine-host
       name: my-host
       command:  ["/bin/sh", "-c", "sleep 2000000000000"]
       securityContext:
@@ -39,9 +39,9 @@ metadata:
   name: pod3
 spec: 
   nodeSelector:
-    kubernetes.io/hostname: kube-master
+    kubernetes.io/hostname: kube-node-1
   containers: 
-    - image: 172.16.0.46:5000/alpine-host
+    - image: networkop/alpine-host
       name: my-host
       command:  ["/bin/sh", "-c", "sleep 2000000000000"]
       securityContext:

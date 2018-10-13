@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+if [ "$#" -ne 1 ]; then
+    echo "Must provide docker hub username"
+    exit 1
+fi
+
 set -e
 set -x
 
@@ -11,11 +16,11 @@ go build -o bin/meshnet plugin/meshnet.go
 CGO_ENABLED=0  go build -o bin/meshnetd daemon/main.go daemon/handler.go daemon/daemon.go
 
 docker build -t meshnetd .
-docker image tag meshnetd 172.16.0.46:5000/meshnetd
-docker image push 172.16.0.46:5000/meshnetd
+docker image tag meshnetd $1/meshnetd
+docker image push $1/meshnetd
 
-kubectl delete -f daemon/meshnetd.yml || true
-kubectl create -f daemon/meshnetd.yml
+cat daemon/meshnetd.yml  | sed "s/IMAGE_NAME/$1\/meshnetd/" | kubectl delete -f daemon/meshnetd.yml || true
+cat daemon/meshnetd.yml  | sed "s/IMAGE_NAME/$1\/meshnetd/" | kubectl create -f -
 
 #
 # Local environment delete before release

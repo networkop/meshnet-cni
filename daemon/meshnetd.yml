@@ -21,7 +21,7 @@ spec:
       - name: meshnetd
         securityContext:
           privileged: true
-        image: 172.16.0.46:5000/meshnetd
+        image: IMAGE_NAME
         resources:
           limits:
             memory: 200Mi

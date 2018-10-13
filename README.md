@@ -1,31 +1,24 @@
 # meshnet CNI
 
-meshnet-cni - a (K8s) CNI plugin to create arbitrary network topologies out of point-to-point links with the help of [koko](https://github.com/redhat-nfvpe/koko). Heavily inspired by [Ratchet-CNI](https://github.com/dougbtv/ratchet-cni), [kokonet](https://github.com/s1061123/kokonet) and [Multus](https://github.com/intel/multus-cni).
+**meshnet** is a (K8s) CNI plugin to create arbitrary network topologies out of point-to-point links with the help of [koko](https://github.com/redhat-nfvpe/koko). Heavily inspired by [Ratchet-CNI](https://github.com/dougbtv/ratchet-cni), [kokonet](https://github.com/s1061123/kokonet) and [Multus](https://github.com/intel/multus-cni).
 
 ## Architecture
-The plugin consists of three main components:
+The goal of this plugin is to interconnect pods via direct point-to-point links according to some pre-define topology. To do that, the plugin uses two types of links:
+* **veth** - used to connect two pods running on the same host
+* **vxlan** - used to connected two pods running on different hosts
 
-* A CNI binary `meshnet` reponsible for network configuration of a pod
-* A daemon `meshnetd` deployed as a daemonset and reponsible for Vxlan configuration updates after remote VTEP changes
-* An `etcd` service storing topology information and runtime pod metadata (e.g. pod IP address and NetNS), which are consumed by the CNI binary
+Topology information, represented as a list of links per pod, is stored in a private etcd cluster in the following format:
 
-Here's a simplified overview of `meshnet` architecture from the perspective of `kube-node-1`.
+```json /pod2/links
+[ {  "uid":            21,
+     "peer_pod":     "pod3",
+     "local_intf":   "eth2",
+     "local_ip":     "23.23.23.2/24",
+     "peer_intf":    "eth2",
+     "peer_ip":      "23.23.23.3/24" }]
+```
 
-![architecture](arch.png)
-
-Here's the order of operation of `meshnet-CNI`:
-
-1. kubelet calls `meshnet` binary and passes standard CNI arguments and environment variables
-2. `meshnet` delegates the provisioning of the primary `eth0` interface to the plugin specified in the `delegate` field of the configuration file (as shown below)
-3. `meshnet` updates etcd with pod's metadata and retrieves topology metadata from etcd
-4. It then iterates over each link in the topology and sets it up according the location of the remote pod:  
-    4.1. If remote pod is on the same node - it connects them via a veth link pair  
-    4.2. If remote pod is on a different node - sets up a local vxlan interface and sends a API call to the remote node's `meshnetd` daemon   
-    When `meshnetd` recieves an API call from a remote node, it tries to idempotently apply the VxLan configuration to the interface of the local pod
-
-
-
-## Plugin configuration example
+The plugin configuration file specifies the connection details of the private etcd cluster, as well as the `delegate` plugin configuration, which will setup the first (`eth0`) interface of the pod.
 
 ```yaml
 {
@@ -49,7 +42,29 @@ Here's the order of operation of `meshnet-CNI`:
 }
 ```
 
-## Usage example
+The plugin consists of three main components:
+
+* **etcd** - a private cluster storing topology information and runtime pod metadata (e.g. pod IP address and NetNS)
+* **meshnet** - a CNI binary reponsible for pod's network configuration
+* **meshned** - a daemon reponsible for Vxlan link configuration updates
+
+![architecture](arch.png)
+
+Below is the order of operation of the plugin from the perspective of kube-node-1:
+
+1. `etcd` cluster gets populated with the topology information
+2. pod-1/pod-2 come up, local kubelet calls the `meshnet` binary for each pod to setup their networking
+3. meshnet binary `delegates` the ADD command to the "master" plugin specified in the CNI configuration file, which connectes the first, **eth0** interface
+4. meshnet binary updates the etcd cluster with pod's metadata (namespace filepath and primary IP address)
+5. meshnet binary retrieves the list of `links` and looks up peer pod's metadata in etcd to compares its own IP address to the primary IP address of each peer
+6. If the peer is on the same node, it calls koko to setup a `veth` link between the two pods
+7. If the peer is on the remote node, it does two things:  
+    7.1 It calls koko to setup a local `vxlan` link  
+    7.2 It makes an `HTTP PUT` call to the remote node's meshnet daemon, specifying this link's metadata (e.g. VTEP IP and VNI)
+8. upon receipt of this information, remote node's `meshnetd` idepmotently updates the local vxlan link, i.e. it creates/updates a new/existing link or does nothing if the link attributes are correct.
+
+
+## Demo
 
 > Note: go 1.11 or later is required
 
@@ -59,30 +74,35 @@ Clone this project and:
 go build ./...
 ```
 
-Build a local test dind kubernetes cluster
+Build a local dind 2-node kubernetes cluster
 
 ```
 ./reinit.sh
 ```
 
-The last step also deploys a new etcd cluster required by `meshnet`.
-
-Build `meshnet`, `meshnetd` and copy them along with CNI .conf file to all mebers of the cluster
+Deploy the private etcd cluster
 
 ```
-./build.sh
+export PATH="$HOME/.kubeadm-dind-cluster:$PATH"
+kubectl create -f utils/etcd.yml
 ```
 
-Pre-seed etcd with topolog information (in this case 3 pods connected as triangle)
+Build `meshnet`, `meshnetd` and copy them along with CNI configuration file to all mebers of the cluster. The scripts requires dockerhub username to be provided to push the `meshnetd` image
 
 ```
-tests/3node-alpine-test.sh
+./build.sh <dockerhub_username>
+```
+
+Upload the topology information to etcd cluster (in this case 3 pods connected as triangle)
+
+```
+tests/upload-topology.sh
 ```
 
 Create 3 test pods (2 pods on 1 node and 1 pod on another)
 
 ```
-cat tests/2test.yml | kubectl create -f -
+cat tests/2node.yml | kubectl create -f -
 ```
 
 Check that all pods are running
@@ -98,12 +118,12 @@ Test connectivity between pods
 
 ```
 kubectl exec pod1 -- sudo ping -c 1 12.12.12.2
-kubectl exec pod1 -- sudo ping -c 1 13.13.13.3
 kubectl exec pod2 -- sudo ping -c 1 23.23.23.3
+kubectl exec pod3 -- sudo ping -c 1 13.13.13.1
 ```
 
 Destroy 3 test pods
 
 ```
-cat tests/3test.yml | kubectl delete --grace-period=0 --force -f -
+cat tests/2node.yml | kubectl delete --grace-period=0 --force -f -
 ```

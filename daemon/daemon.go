@@ -72,9 +72,9 @@ func (v *vtepData) createOrUpdate() error {
 	// Check if interface already exists
 	vxlanLink, ok := link.(*netlink.Vxlan)
 	if ok { // the link we've found is a vxlan link
-		// If yes, we check if the VXLAN Parameters are different
-		if vxlanLink.VxlanId != vxlan.ID || vxlanLink.Group.Equal(vxlan.IPAddr) {
-			// If yes, we remove the existing link and add a new one
+
+		if vxlanLink.VxlanId != vxlan.ID || vxlanLink.Group.Equal(vxlan.IPAddr) { // If Vxlan attrs are different
+			// We remove the existing link and add a new one
 			if err = veth.RemoveVethLink(); err != nil {
 				return fmt.Errorf(" MESHNETD: Error when removing an old Vxlan interface with koko: %s", err)
 			}
@@ -82,9 +82,10 @@ func (v *vtepData) createOrUpdate() error {
 			if err = api.MakeVxLan(veth, vxlan); err != nil {
 				return fmt.Errorf(" MESHNETD: Error when creating a Vxlan interface with koko: %s", err)
 			}
-		} // If the are the same, do nothing
+		} // If Vxlan attrs are the same, do nothing
+
 	} else { // the link we've found isn't a vxlan or doesn't exist
-		// If interface doesn't exist, simply create it
+		// In this case we simply create a new one
 		if err = api.MakeVxLan(veth, vxlan); err != nil {
 			return fmt.Errorf(" MESHNETD: Error when creating a Vxlan interface with koko: %s", err)
 		}
