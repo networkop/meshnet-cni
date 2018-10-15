@@ -46,7 +46,7 @@ The plugin consists of three main components:
 
 * **etcd** - a private cluster storing topology information and runtime pod metadata (e.g. pod IP address and NetNS)
 * **meshnet** - a CNI binary reponsible for pod's network configuration
-* **meshned** - a daemon reponsible for Vxlan link configuration updates
+* **meshnetd** - a daemon reponsible for Vxlan link configuration updates
 
 ![architecture](arch.png)
 
