@@ -3,8 +3,10 @@ kind: Service
 metadata:
   name: etcd-client
 spec:
+  type: NodePort  
   ports:
   - name: etcd-client-port
+    nodePort: 32379
     port: 2379
     protocol: TCP
     targetPort: 2379

@@ -391,7 +391,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 				// Creating koko's Vxlan struct
 				vxlan := makeVxlan(srcIntf, peerPod.SrcIP, link.UID)
 				if err = api.MakeVxLan(*myVeth, *vxlan); err != nil {
-					return fmt.Errorf("Error when creating a Vxlan interface with koko: %s", err)
+					// we're not returning err here, assuming meshnetd will do the job
+					log.Printf("Error when creating a Vxlan interface with koko: %s", err)
 				}
 
 				// Now we need to make an API call to update the remote VTEP to point to us

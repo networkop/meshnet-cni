@@ -3,9 +3,12 @@ cd utils
 wget -N https://raw.githubusercontent.com/kubernetes-sigs/kubeadm-dind-cluster/master/fixed/dind-cluster-v1.11.sh 
 chmod +x ./dind-cluster-v1.11.sh 
 export PATH="$HOME/.kubeadm-dind-cluster:$PATH"
-
 ./dind-cluster-v1.11.sh down
-./dind-cluster-v1.11.sh up
+EXTRA_PORTS=32379 ./dind-cluster-v1.11.sh up
 
 kubectl taint nodes --all node-role.kubernetes.io/master-
-cd ../
+cd ../ 
+
+ETCD_PORT=$(docker inspect kube-node-1 --format='{{ (index (index .NetworkSettings.Ports "32379/tcp") 0).HostPort }}')
+
+echo "export ENDPOINTS=127.0.0.1:$ETCD_PORT"
