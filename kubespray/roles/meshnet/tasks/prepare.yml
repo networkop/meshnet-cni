@@ -1,0 +1,7 @@
+---
+- name: Force binaries directory for Container Linux by CoreOS
+  set_fact:
+    bin_dir: "{{ default_bin_dir }}"
+
+- set_fact:
+    ansible_python_interpreter: "{{ bin_dir }}/python"

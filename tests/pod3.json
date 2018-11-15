@@ -1,0 +1,18 @@
+[
+    {
+        "uid": 13,
+        "peer_pod": "pod1",
+        "local_intf": "eth2",
+        "local_ip": "13.13.13.3/24",
+        "peer_intf": "eth2",
+        "peer_ip": "13.13.13.1/24"
+    },
+    {
+        "uid": 12,
+        "peer_pod": "pod2",
+        "local_intf": "eth1",
+        "local_ip": "23.23.23.3/24",
+        "peer_intf": "eth2",
+        "peer_ip": "23.23.23.2/24"
+    }
+]

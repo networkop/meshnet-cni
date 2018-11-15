@@ -1,0 +1,29 @@
+---
+- name: Install required python modules
+  pip:
+    name: "{{ item }}"
+    extra_args: --upgrade
+  with_items: 
+  - docker-py
+  environment:
+    PATH: "{{ ansible_env.PATH }}:{{ bin_dir }}"
+
+- name: Create etcd.yml file
+  template:
+    src: etcd.yml.j2
+    dest: /tmp/etcd.yml
+
+- name: Install etcd cluster
+  command: kubectl create -f /tmp/etcd.yml
+  delegate_to: "{{groups['kube-master'][0]}}"
+  run_once: yes
+
+- name: Create meshnet.yml file
+  template:
+    src: kube-meshnet.yml.j2
+    dest: /tmp/kube-meshnet.yml
+
+- name: Install meshnet
+  command: kubectl create -f /tmp/kube-meshnet.yml
+  delegate_to: "{{groups['kube-master'][0]}}"
+  run_once: yes
