@@ -197,22 +197,6 @@ func (pod *podMeta) setSkipped(ctx context.Context, kv clientv3.KV, peer string)
 
 func (pod *podMeta) unsetSkipped(ctx context.Context, kv clientv3.KV, peer string) error {
 	log.Printf("Unsetting skipped veth flag for %s and peer %s", pod.Name, peer)
-	// Setting reverse skipped is needed in case our pod has been manually reset
-	reverseSkippedKey := fmt.Sprintf("/%s/skipped/%s", peer, pod.Name)
-	peerPod := &podMeta{
-		Name: peer,
-	}
-	if err := peerPod.getPodMetadata(ctx, kv); err != nil {
-		return err
-	}
-	// If peer pod is still alive mark is if it has skipped us
-	if peerPod.isAlive() {
-		_, err := kv.Put(ctx, reverseSkippedKey, "true")
-		if err != nil {
-			return err
-		}
-	}
-
 	// Unsetting local pod's skipped keys
 	skippedKey := fmt.Sprintf("/%s/skipped/%s", pod.Name, peer)
 	_, err := kv.Delete(ctx, skippedKey)
