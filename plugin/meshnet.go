@@ -445,17 +445,17 @@ func cmdAdd(args *skel.CmdArgs) error {
 						return err
 					}
 
-					// We don't actually care if the address is higher, just comparing strings is enough
-					higherIP := link.LocalIP > link.PeerIP
+					// Comparing names to determine higher priority
+					higherPrio := localPod.Name > link.PeerPod
 
-					if isSkipped || higherIP { // If peer POD skipped us (booted before us) or we have a higher IP address
+					if isSkipped || higherPrio { // If peer POD skipped us (booted before us) or we have a higher priority
 						if err = koko.MakeVeth(*myVeth, *peerVeth); err != nil {
 							log.Printf("Error when creating a new VEth pair with koko: %s", err)
 							log.Printf("MY VETH STRUCT: %+v", spew.Sdump(myVeth))
 							log.Printf("PEER STRUCT: %+v", spew.Sdump(peerVeth))
 							return err
 						}
-					} else { // peerPod has higherIP and hasn't skipped us
+					} else { // peerPod has higherPrio and hasn't skipped us
 						// In this case we do nothing, since the pod with a higher IP is supposed to connect veth pair
 						continue
 					}
