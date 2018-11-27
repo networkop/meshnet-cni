@@ -195,11 +195,10 @@ func (pod *podMeta) setSkipped(ctx context.Context, kv clientv3.KV, peer string)
 	return nil
 }
 
-func (pod *podMeta) unsetSkipped(ctx context.Context, kv clientv3.KV, peer string) error {
-	log.Printf("Unsetting skipped veth flag for %s and peer %s", pod.Name, peer)
-	// Unsetting local pod's skipped keys
-	skippedKey := fmt.Sprintf("/%s/skipped/%s", pod.Name, peer)
-	_, err := kv.Delete(ctx, skippedKey)
+func (pod *podMeta) setSkippedReversed(ctx context.Context, kv clientv3.KV, peer string) error {
+	log.Printf("Setting skipped reversed veth flag for %s and peer %s", pod.Name, peer)
+	skippedKey := fmt.Sprintf("/%s/skipped/%s", peer, pod.Name)
+	_, err := kv.Put(ctx, skippedKey, "true")
 	if err != nil {
 		return err
 	}
@@ -449,6 +448,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 					higherPrio := localPod.Name > link.PeerPod
 
 					if isSkipped || higherPrio { // If peer POD skipped us (booted before us) or we have a higher priority
+						log.Printf("Peer POD has skipped us or we have a higher IP")
 						if err = koko.MakeVeth(*myVeth, *peerVeth); err != nil {
 							log.Printf("Error when creating a new VEth pair with koko: %s", err)
 							log.Printf("MY VETH STRUCT: %+v", spew.Sdump(myVeth))
@@ -457,6 +457,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 						}
 					} else { // peerPod has higherPrio and hasn't skipped us
 						// In this case we do nothing, since the pod with a higher IP is supposed to connect veth pair
+						log.Printf("Doing nothing, expecting peer POD to connect veth pair")
 						continue
 					}
 				}
@@ -577,13 +578,13 @@ func cmdDel(args *skel.CmdArgs) error {
 		Name: string(cniArgs.K8S_POD_NAME),
 	}
 
-	// Query etcd for local pod's metadata
-	if err = localPod.getPodMetadata(ctx, kv); err != nil {
+	// By setting srcIP and NetNS to "" we're marking this POD as dead
+	if err = localPod.setPodAlive(ctx, kv, "", ""); err != nil {
 		return err
 	}
 
-	// By setting srcIP and NetNS to "" we're marking this POD as dead
-	if err = localPod.setPodAlive(ctx, kv, "", ""); err != nil {
+	// Query etcd for local pod's metadata
+	if err = localPod.getPodMetadata(ctx, kv); err != nil {
 		return err
 	}
 
@@ -601,8 +602,8 @@ func cmdDel(args *skel.CmdArgs) error {
 			log.Printf("Error removing Veth link: %s", err)
 		}
 
-		// Unsetting skipped flag
-		if err = localPod.unsetSkipped(ctx, kv, link.PeerPod); err != nil {
+		// Setting reversed skipped flag so that this pod will try to connect veth pair on restart
+		if err = localPod.setSkippedReversed(ctx, kv, link.PeerPod); err != nil {
 			return err
 		}
 	}
