@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
 
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -34,7 +35,7 @@ func getLinkFromNS(nsName string, linkName string) (result netlink.Link) {
 		return err
 	})
 
-	return
+	return result
 }
 
 func (v *vtepData) createOrUpdate() error {
@@ -43,6 +44,7 @@ func (v *vtepData) createOrUpdate() error {
 	if err != nil {
 		return err
 	}
+	log.SetPrefix(fmt.Sprintf("---| MESHNETD |===> "))
 
 	// Creating koko Veth struct
 	veth := api.VEth{}
@@ -59,6 +61,7 @@ func (v *vtepData) createOrUpdate() error {
 			Mask: ipSubnet.Mask,
 		}}
 	}
+	log.Printf("Created koko Veth struct %+v", veth)
 
 	// Creating koko vxlan struct
 	vxlan := api.VxLan{
@@ -66,9 +69,11 @@ func (v *vtepData) createOrUpdate() error {
 		IPAddr:   net.ParseIP(v.PeerVtep),
 		ID:       v.VNI,
 	}
+	log.Printf("Created koko vxlan struct %+v", vxlan)
 
 	// Try to read interface attributes from netlink
 	link := getLinkFromNS(veth.NsName, veth.LinkName)
+	log.Printf("Retrieved %s link from %s Netns: %+v", veth.LinkName, veth.NsName, link)
 
 	// Check if interface already exists
 	vxlanLink, ok := link.(*netlink.Vxlan)
@@ -86,6 +91,7 @@ func (v *vtepData) createOrUpdate() error {
 		} // If Vxlan attrs are the same, do nothing
 
 	} else { // the link we've found isn't a vxlan or doesn't exist
+		// We first need to
 		// In this case we simply create a new one
 		if err = api.MakeVxLan(veth, vxlan); err != nil {
 			return fmt.Errorf(" MESHNETD: Error when creating a new Vxlan interface with koko: %s", err)
