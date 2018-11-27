@@ -45,8 +45,8 @@ import (
 const (
 	etcdHost       = "localhost"
 	etcdPort       = "2379"
-	requestTimeout = 10 * time.Second
-	dialTimeout    = 2 * time.Second
+	requestTimeout = 20 * time.Second
+	dialTimeout    = 4 * time.Second
 	vxlanBase      = 5000
 	defaultPort    = "8181"
 )
@@ -476,8 +476,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 					}
 				}
 				if err = koko.MakeVxLan(*myVeth, *vxlan); err != nil {
-					// we're not returning err here, assuming meshnetd will do the job
 					log.Printf("Error when creating a Vxlan interface with koko: %s", err)
+					return err
 				}
 
 				// Now we need to make an API call to update the remote VTEP to point to us
@@ -496,6 +496,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				// Build URL
 				port := getEnv("MESHNETD_PORT", defaultPort)
 				url := fmt.Sprintf("http://%s:%s/vtep", peerPod.SrcIP, port)
+				log.Printf("Sending payload %+v to remote URL: %s", payload, url)
 				// Send Post request and catch any errors
 				if err = putRequest(url, bytes.NewBuffer(jsonBytes)); err != nil {
 					return err

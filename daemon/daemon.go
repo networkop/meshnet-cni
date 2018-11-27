@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/redhat-nfvpe/koko/api"
@@ -44,7 +45,7 @@ func (v *vtepData) createOrUpdate() error {
 	if err != nil {
 		return err
 	}
-	log.SetPrefix(fmt.Sprintf("---| MESHNETD |===> "))
+	log.SetPrefix(fmt.Sprintf("---| MESHNETD:%d |===> ", v.VNI))
 
 	// Creating koko Veth struct
 	veth := api.VEth{}
@@ -77,10 +78,13 @@ func (v *vtepData) createOrUpdate() error {
 
 	// Check if interface already exists
 	vxlanLink, ok := link.(*netlink.Vxlan)
+	log.Printf("Is link %+v a VXLAN?: %s", vxlanLink, strconv.FormatBool(ok))
 	if ok { // the link we've found is a vxlan link
 
 		if !(vxlanLink.VxlanId == vxlan.ID && vxlanLink.Group.Equal(vxlan.IPAddr)) { // If Vxlan attrs are different
+
 			// We remove the existing link and add a new one
+			log.Printf("Vxlan attrs are different: %d!=%d or %v!=%v", vxlanLink.VxlanId, vxlan.ID, vxlanLink.Group, vxlan.IPAddr)
 			if err = veth.RemoveVethLink(); err != nil {
 				return fmt.Errorf(" MESHNETD: Error when removing an old Vxlan interface with koko: %s", err)
 			}
@@ -91,10 +95,21 @@ func (v *vtepData) createOrUpdate() error {
 		} // If Vxlan attrs are the same, do nothing
 
 	} else { // the link we've found isn't a vxlan or doesn't exist
-		// We first need to
-		// In this case we simply create a new one
+
+		log.Printf("Link %+v we've found isn't a vxlan or doesn't exist", link)
+		// If link exists but wasn't matched as vxlan, we need to delete it
+		if link != nil {
+			log.Printf("Attempting to remove link %+v", veth)
+			if err = veth.RemoveVethLink(); err != nil {
+				return fmt.Errorf(" MESHNETD: Error when removing an old non-Vxlan interface with koko: %s", err)
+			}
+		}
+
+		// Then we simply create a new one
+		log.Printf("Creating a VXLAN link: %v; inside the pod: %v", vxlan, veth)
 		if err = api.MakeVxLan(veth, vxlan); err != nil {
-			return fmt.Errorf(" MESHNETD: Error when creating a new Vxlan interface with koko: %s", err)
+			log.Printf(" MESHNETD: Error when creating a new Vxlan interface with koko: %s", err)
+			return err
 		}
 	}
 
