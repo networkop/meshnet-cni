@@ -300,3 +300,15 @@ Destroy the topology
 ```
 ./bin/k8s-topo --destroy examples/builder/random.yml 
 ```
+
+
+## Troubleshooting
+
+Each POD is supposed to run an `init-wait` container that waits for the right number of interface to be connected before passing the ball to the main container. However, sometimes, PODs restart resulting in the missing interfaces inside the main container process, since they may have been added *AFTER* the process that reads the container interface list (e.g. qemu-kvm for VM-based containers). This is the procedure I use to identify the cause of the failure:
+
+1. Identify which POD is at fault. This will most likely be the incorrect number of interfaces.
+2. Identify which interface is missing or was added last.
+3. Identify the correlation between the pair of containers interconnected by the missing interface
+4. Look for the peer container's failures using `kubectl get events --sort-by=.metadata.creationTimestamp'`
+5. Identify which k8s node this POD is running on `kubectl get pods  zhfer-scs1001-a -o yaml  | grep node`
+6. On that node check the `journalctl` for any errors associated with the POD

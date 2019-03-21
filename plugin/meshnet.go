@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/invoke"
@@ -39,7 +40,7 @@ import (
 	"go.etcd.io/etcd/clientv3"
 
 	"github.com/davecgh/go-spew/spew"
-	koko "github.com/redhat-nfvpe/koko/api"
+	koko "github.com/networkop/koko/api"
 )
 
 const (
@@ -273,6 +274,7 @@ func makeVxlan(srcIntf string, peerIP string, idx int) *koko.VxLan {
 
 // DelegateAdd call
 func delegateAdd(ctx context.Context, netconf map[string]interface{}, intfName string) (result types.Result, err error) {
+
 	netconfBytes, err := json.Marshal(netconf)
 	if err != nil {
 		return nil, fmt.Errorf("Error serialising delegate config %v", err)
@@ -477,8 +479,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 					}
 				}
 				if err = koko.MakeVxLan(*myVeth, *vxlan); err != nil {
-					log.Printf("Error when creating a Vxlan interface with koko: %s", err)
-					return err
+					if strings.Contains(err.Error(), "file exists") {
+						log.Printf("Error when creating a Vxlan interface with koko, file exists")
+					} else {
+						log.Printf("Error when creating a Vxlan interface with koko: %s", err)
+						return err
+					}
 				}
 
 				// Now we need to make an API call to update the remote VTEP to point to us

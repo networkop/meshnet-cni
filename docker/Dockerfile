@@ -1,4 +1,4 @@
-FROM golang:1.11 AS build
+FROM golang:1.11 AS build 
 WORKDIR /meshnet
 COPY plugin/ ./plugin
 COPY daemon/ ./daemon

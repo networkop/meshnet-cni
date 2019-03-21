@@ -5,9 +5,10 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"strings"
 
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/redhat-nfvpe/koko/api"
+	"github.com/networkop/koko/api"
 	"github.com/vishvananda/netlink"
 )
 
@@ -90,7 +91,11 @@ func (v *vtepData) createOrUpdate() error {
 			}
 
 			if err = api.MakeVxLan(veth, vxlan); err != nil {
-				return fmt.Errorf(" MESHNETD: Error when re-creating a Vxlan interface with koko: %s", err)
+				if strings.Contains(err.Error(), "file exists") {
+					log.Printf(" MESHNETD: Error when creating a Vxlan interface with koko, file exists")
+				} else {
+					return fmt.Errorf(" MESHNETD: Error when re-creating a Vxlan interface with koko: %s", err)
+				}
 			}
 		} // If Vxlan attrs are the same, do nothing
 
@@ -108,8 +113,12 @@ func (v *vtepData) createOrUpdate() error {
 		// Then we simply create a new one
 		log.Printf("Creating a VXLAN link: %v; inside the pod: %v", vxlan, veth)
 		if err = api.MakeVxLan(veth, vxlan); err != nil {
-			log.Printf(" MESHNETD: Error when creating a new Vxlan interface with koko: %s", err)
-			return err
+			if strings.Contains(err.Error(), "file exists") {
+				log.Printf(" MESHNETD: Error when creating a Vxlan interface with koko, file exists")
+			} else {
+				log.Printf(" MESHNETD: Error when creating a new Vxlan interface with koko: %s", err)
+				return err
+			}
 		}
 	}
 

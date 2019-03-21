@@ -13,7 +13,7 @@
   wait_for:
     path: /etc/cni/net.d/00-meshnet.conf 
     state: present
-    timeout: 30
+    timeout: 50
     msg: Timeout to find file /etc/cni/net.d/00-meshnet.conf 
 
 - name: Update etcd cluster ip
