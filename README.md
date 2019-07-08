@@ -171,6 +171,7 @@ First, ensure that the `delegate` key contains a valid CNI configuration of an e
 ```
   "delegate": {
     "type": "flannel",
+    "name": "flannel_network",
     "delegate": {
       "forceAddress": true,
       "hairpinMode": true,
