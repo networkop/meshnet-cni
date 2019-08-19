@@ -1,32 +1,48 @@
 package main
 
 import (
-	"fmt"
-	"log"
-	"net/http"
-	"os"
+	"flag"
 
-	"github.com/gorilla/mux"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
-	defaultPort = "8181"
+	defaultPort = 51111
 )
 
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-	return fallback
-}
-
 func main() {
-	r := mux.NewRouter()
-	r.HandleFunc("/vtep", createVtepHandler).Methods("PUT")
 
-	// Startup the server
-	port := getEnv("MESHNETD_PORT", defaultPort)
-	url := fmt.Sprintf("0.0.0.0:%s", port)
-	log.Fatal(http.ListenAndServe(url, r))
+	isDebug := flag.Bool("d", false, "enable degugging")
+	flag.Parse()
 
+	if *isDebug {
+		log.SetLevel(log.DebugLevel)
+		log.Debug("Verbose logging enabled")
+	} else {
+		log.SetLevel(log.InfoLevel)
+	}
+
+	kubeClient, err := newDynamicClient()
+	if err != nil {
+		log.Fatal("Failed to connect to K8s API")
+	}
+
+	config := loadConfigVars()
+
+	meshnetd := &meshnetd{
+		config: config,
+		kube:   kubeClient,
+	}
+
+	go func() {
+		err := meshnetd.Start()
+		if err != nil {
+			log.Fatal("Failed to start meshnet daemon")
+		}
+	}()
+
+	log.Info("meshnet daemon has started...")
+	// Wait forever
+	ch := make(chan struct{})
+	<-ch
 }

@@ -1,48 +1,69 @@
 ---
 apiVersion: v1
-kind: Pod
-metadata:
-  labels:
-    future.topo.selector: topology-1
-  name: pod1
-spec: 
-  nodeSelector:
-    kubernetes.io/hostname: kube-node-1
-  containers: 
-    - image: networkop/alpine-host
-      name: my-host
+kind: List
+items:
+- apiVersion: networkop.co.uk/v1beta1
+  kind: Topology
+  metadata:
+    name: r1
+  spec:
+    links:
+    - uid: 1
+      peer_pod: r2
+      local_intf: eth1
+      local_ip: 12.12.12.1/24
+      peer_intf: eth1
+      peer_ip: 12.12.12.2/24
+- apiVersion: networkop.co.uk/v1beta1
+  kind: Topology
+  metadata:
+    name: r2
+  spec: 
+    links:
+    - uid: 1
+      peer_pod: r1
+      local_intf: eth1
+      local_ip: 12.12.12.2/24
+      peer_intf: eth1
+      peer_ip: 12.12.12.1/24
+- apiVersion: networkop.co.uk/v1beta1
+  kind: Topology
+  metadata:
+    name: r3
+  spec: 
+    links:
+    - uid: 2
+      peer_pod: r4
+      local_intf: eth1
+      peer_intf: eth1
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    name: r1
+  spec: 
+    containers: 
+    - image: alpine
+      name: pod
       command:  ["/bin/sh", "-c", "sleep 2000000000000"]
-      securityContext:
-        privileged: true
----
-apiVersion: v1
-kind: Pod
-metadata:
-  labels:
-    future.topo.selector: topology-1
-  name: pod2
-spec: 
-  nodeSelector:
-    kubernetes.io/hostname: kube-node-1
-  containers: 
-    - image: networkop/alpine-host
-      name: my-host
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    name: r2
+    labels:
+      test: 2node
+  spec: 
+    containers: 
+    - image: alpine
+      name: pod
       command:  ["/bin/sh", "-c", "sleep 2000000000000"]
-      securityContext:
-        privileged: true
----
-apiVersion: v1
-kind: Pod
-metadata:
-  labels:
-    future.topo.selector: topology-1
-  name: pod3
-spec: 
-  nodeSelector:
-    kubernetes.io/hostname: kube-node-2
-  containers: 
-    - image: networkop/alpine-host
-      name: my-host
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    name: r4
+    labels:
+      test: 2node
+  spec: 
+    containers: 
+    - image: alpine
+      name: pod
       command:  ["/bin/sh", "-c", "sleep 2000000000000"]
-      securityContext:
-        privileged: true

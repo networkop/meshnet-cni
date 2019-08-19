@@ -1,32 +1,44 @@
-# meshnet CNI
+# meshnet CNI 
 
 **meshnet** is a (K8s) CNI plugin to create arbitrary network topologies out of point-to-point links with the help of [koko](https://github.com/redhat-nfvpe/koko). Heavily inspired by [Ratchet-CNI](https://github.com/dougbtv/ratchet-cni), [kokonet](https://github.com/s1061123/kokonet) and [Multus](https://github.com/intel/multus-cni).
 
+## New in version 0.2.0
+
+* Using K8s etcd as datastore via Custom Resources
+* All internal communication now happens over gRPC
+* Support for macvlan links to connect to external resources
+
+
 ## Architecture
-The goal of this plugin is to interconnect pods via direct point-to-point links according to some pre-define topology. To do that, the plugin uses two types of links:
+The goal of this plugin is to interconnect pods via direct point-to-point links according to a pre-define topology. To do that, the plugin uses three types of links:
 * **veth** - used to connect two pods running on the same host
 * **vxlan** - used to connected two pods running on different hosts
+* **macvlan** - used to connect to external resources, i.e. any physical or virtual device outside of the Kubernetes cluster
 
-Topology information, represented as a list of links per pod, is stored in a private etcd cluster in the following format:
+Topology information, represented as a list of links per pod, is stored in k8s's etcd datastore as custom resources:
 
-```json /pod2/links
-[ {  "uid":            21,
-     "peer_pod":     "pod3",
-     "local_intf":   "eth2",
-     "local_ip":     "23.23.23.2/24",
-     "peer_intf":    "eth2",
-     "peer_ip":      "23.23.23.3/24" }]
+```yaml
+apiVersion: networkop.co.uk/v1beta1
+kind: Topology
+metadata:
+  name: r1
+spec:
+  links:
+  - uid: 1
+    peer_pod: r2
+    local_intf: eth1
+    local_ip: 12.12.12.1/24
+    peer_intf: eth1
+    peer_ip: 12.12.12.2/24
 ```
 
-The plugin configuration file specifies the connection details of the private etcd cluster, as well as the `delegate` plugin configuration, which will setup the first (`eth0`) interface of the pod.
+The plugin configuration file specifies the `delegate` plugin configuration, which will setup the first (`eth0`) interface of the pod.
 
 ```yaml
 {
   "cniVersion": "0.1.0",
   "name": "my_network",       <--- Arbitrary name
   "type": "meshnet",          <--- The name of CNI plugin binary
-  "etcd_host": "10.97.209.1", <--- IP address of etcd service 
-  "etcd_port": "2379",
   "delegate": {               <--- Plugin responsible for the first interface (eth0)
     "name": "dind0",
     "bridge": "dind0",
@@ -44,182 +56,125 @@ The plugin configuration file specifies the connection details of the private et
 
 The plugin consists of three main components:
 
-* **etcd** - a private cluster storing topology information and runtime pod metadata (e.g. pod IP address and NetNS)
-* **meshnet** - a CNI binary reponsible for pod's network configuration
-* **meshnetd** - a daemon reponsible for Vxlan link configuration updates
+* **datastore** - a k8s native etcd backend cluster storing topology information and runtime pod metadata (e.g. pod IP address and NetNS)
+* **meshnet** - a CNI binary responsible for pod's network configuration
+* **meshnetd** - a daemon responsible for communication with k8s and vxlan link configuration updates
 
-![architecture](arch.png)
+![architecture](arch_v0_2_0.png)
 
 Below is the order of operation of the plugin from the perspective of kube-node-1:
 
-1. `etcd` cluster gets populated with the topology information
-2. pod-1/pod-2 come up, local kubelet calls the `meshnet` binary for each pod to setup their networking
-3. meshnet binary `delegates` the ADD command to the "master" plugin specified in the CNI configuration file, which connectes interface `eth0`
+1. Kubernetes cluster gets populated with the topology information via custom resources
+2. pod-1/pod-2 come up, local kubelet calls the `meshnet` binary for each pod to setup their networking.
+3. meshnet binary `delegates` the ADD command to the "master" plugin specified in the CNI configuration file, which connectes interface `eth0`.
   > Note that `eth0` is **always** setup by one of the existing CNI plugins. It is used to provide external connectivity to and from the pod
-4. meshnet binary updates the etcd cluster with pod's metadata (namespace filepath and primary IP address)
-5. meshnet binary retrieves the list of `links` and looks up peer pod's metadata in etcd to compare its own IP address to the primary IP address of each peer
-6. If the peer is on the same node, it calls koko to setup a `veth` link between the two pods
+4. meshnet binary updates the topology data with pod's runtime metadata (namespace filepath and primary IP address).
+5. meshnet binary (via a local meshnet daemon) retrieves the list of `links` and looks up peer pod's metadata to identify what kind of link to setup - veth, vxlan or macvlan.
+6. If the peer is on the same node, it calls koko to setup a `veth` link between the two pods.
 7. If the peer is on the remote node, it does two things:  
-    7.1 It calls koko to setup a local `vxlan` link  
-    7.2 It makes an `HTTP PUT` call to the remote node's meshnet daemon, specifying this link's metadata (e.g. VTEP IP and VNI)
+    7.1 It calls koko to setup a local `vxlan` link.
+    7.2 It makes a gRPC `Update` call to the remote node's meshnet daemon, specifying this link's metadata (e.g. VTEP IP and VNI).
 8. Upon receipt of this information, remote node's `meshnetd` idepmotently updates the local vxlan link, i.e. it creates a new link, updates the existing link if there's a change or does nothing if the link attributes are the same.
-
 
 ## Local Demo
 
-> Note: go 1.11 or later is required
-
-Clone this project and build a local dind 3-node kubernetes cluster
+Clone this project and build a local 3-node Kubernetes cluster
 
 ```
-./reinit.sh
+make local
 ```
 
-Deploy the private etcd cluster
+Install meshnet-cni plugin
 
 ```
-export PATH="$HOME/.kubeadm-dind-cluster:$PATH"
-kubectl create -f utils/etcd.yml
+make install
 ```
 
-Build `meshnet` and `meshnetd`. The scripts also builds a Docker image and requires a dockerhub username to be provided to push the image to the docker hub.
-
-> Note: the first time the command runs, it pulls down all the dependencies specified in `go.mod`, which may take a few  minutes to complete
+Verify that meshnet is up and `READY`
 
 ```
-./build.sh <dockerhub_username>
+kubectl get daemonset -n meshnet
 ```
 
-
-Deploy meshnet plugin
-
-```
-kubectl create -f kube-meshnet.yml
-```
-
-Upload the topology information to etcd cluster (in this case 3 pods connected as triangle)
+Install a 3-node test topology
 
 ```
-tests/upload-topology.sh
-```
-
-Create 3 test pods (2 pods on 1 node and 1 pod on another)
-
-```
-cat tests/2node.yml | kubectl create -f -
+kubectl apply -f tests/3node.yml
 ```
 
 Check that all pods are running
 
 ```
-kubectl --namespace=default get pods -o wide  |  grep pod
-pod1                                  1/1       Running   0          3m        10.244.2.31   kube-node-1
-pod2                                  1/1       Running   0          3m        10.244.2.32   kube-node-1
-pod3                                  1/1       Running   0          3m        10.244.1.15   kube-master
+kubectl get pods -l test=3node                                                                  
+NAME   READY   STATUS    RESTARTS   AGE
+r1     1/1     Running   0          40m
+r2     1/1     Running   0          40m
+r3     1/1     Running   0          40s
 ```
 
 Test connectivity between pods
 
 ```
-kubectl exec pod1 -- sudo ping -c 1 12.12.12.2
-kubectl exec pod2 -- sudo ping -c 1 23.23.23.3
-kubectl exec pod3 -- sudo ping -c 1 13.13.13.1
+kubectl exec r1 -- ping -c 1 12.12.12.2
+kubectl exec r2 -- ping -c 1 23.23.23.3
+kubectl exec r3 -- ping -c 1 13.13.13.1
 ```
 
-Destroy 3 test pods
+Cleanup
 
 ```
-cat tests/2node.yml | kubectl delete --grace-period=0 --force -f -
+kubectl delete --grace-period=0 --force -f tests/3node.yml
+```
+
+Destroy the local kind cluster
+
+```
+make clean
 ```
 
 
 ## Installation
 
-### Generic instructions
+The following manifest will create all that's required for meshnet plugin to function, i.e.:
 
-The following instructions are executed from a node with kubectl access to kubernetes cluster.
-
-#### Step 1 - Install private etcd cluster
-
-```
-kubectl create -f utils/etcd.yml
-```
-
-#### Step 2 - Install meshnet CNI plugin
+* A `meshnet` namespace
+* A Custom Resource Definition for network topologies
+* A set of RBAC rules to allow meshnet to interact with new custom resources
+* A daemonset with meshnet plugin and configuration files
 
 ```
-kubectl create -f kube-meshnet.yml
+kubectl apply -f manifests/meshnet.yml
 ```
 
-#### Step 3 - Update CNI configuration file
+#### Interaction with existing resources
 
-Meshnet CNI configuration file requires two updates. 
+Meshnet plugin was designed to work alongside any other existing or future Kubernetes resources that may not require any special topology to be set up for them. Every pod coming up will have its first interface setup by an existing CNI plugin (e.g. flannel, weave, calico) and will only have additional interfaces connected if there's a matching custom `Topology` resource.
+
+During the initial installation process, meshnet will try to merge the existing CNI plugin configuration with meshnet CNI configuration. Below is the final example of meshnet+weave plugin configuration file:
 
 ```
 {
-  "cniVersion": "0.1.0",
+  "cniVersion": "0.2.0",
   "name": "meshnet_network",
   "type": "meshnet",
-  "etcd_host": "10.103.144.119",   <-- Update 2
-  "etcd_port": "2379",
-  "delegate": {}                   <-- Update 1
+  "delegate": {
+    "name": "weave",
+    "type": "weave-net",
+    "hairpinMode": true
+  }
 }
 ```
 
-First, ensure that the `delegate` key contains a valid CNI configuration of an existing plugin (e.g. bridge, flannel, weave). The following is an example for flannel:
+### Examples
 
-```
-  "delegate": {
-    "type": "flannel",
-    "name": "flannel_network",
-    "delegate": {
-      "forceAddress": true,
-      "hairpinMode": true,
-      "isDefaultGateway": true
-    }
-  }
-```
+Inside the `tests` directory there are 4 manifests with the following test topologies
 
-Second, update etcd host to point to the previously deployed etcd cluster. The following command shows a Cluster-IP for etcd-client service:
+* A simple point-to-point 2-node topology
+* A 3-node topology connected as a triangle
+* A 5-node topology connected as [quincunx](https://en.wikipedia.org/wiki/Quincunx)
+* A 2-node topology with 2nd node connected to a macvlan interface
 
-```
-$ kubectl get service etcd-client
-NAME          TYPE       CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
-etcd-client   NodePort   10.103.144.119   <none>        2379:32379/TCP   15m
-```
-
-### Kubespray instructions
-
-#### (Optional) Step 1 - Install 4-node K8s cluster using Kubespray
-
-These instructions will install k8s with flannel as default CNI plugin and allow any insecure Docker registries.
-
-```
-git clone https://github.com/kubernetes-incubator/kubespray.git &&  cd kubespray
-
-sudo pip install -r requirements.txt
-
-cp -rfp inventory/sample/ inventory/mycluster
-
-declare -a IPS=(10.83.30.251 10.83.30.252 10.83.30.253 10.83.30.254)
-
-CONFIG_FILE=inventory/mycluster/hosts.ini python3 contrib/inventory_builder/inventory.py ${IPS[@]}
-
-sed -i 's/calico/flannel/g' inventory/mycluster/group_vars/k8s-cluster/k8s-cluster.yml
-
-echo -e "docker_insecure_registries:\n   - 0.0.0.0/0" >> inventory/mycluster/group_vars/all/docker.yml
-
-ansible-playbook -i inventory/mycluster/hosts.ini --become --become-user=root -u core cluster.yml
-```
-
-#### Step 2 - Install hosted meshnet service on top of K8s cluster
-
-```
-cp inventory/mycluster/hosts.ini ~/meshnet-cni/kubespray/ && cd ~/meshnet-cni/kubespray/
-./build.sh
-```
-
-#### (Optional) Step 3 - Use k8s-topo to orchestrate network topologies
+#### Use k8s-topo to orchestrate network topologies
 
 Login the K8s master node and
 
@@ -230,10 +185,10 @@ git clone https://github.com/networkop/k8s-topo.git && cd k8s-topo
 Deploy k8s-topo pod
 
 ```
-kubectl create -f kube-k8s-topo.yml
+kubectl create -f manifest.yml
 ```
 
-Login the k8s-topo pod
+Connect to the k8s-topo pod
 
 ```
 kubectl exec -it k8s-topo sh
@@ -249,16 +204,16 @@ Total number of links generated: 19
 Create the topology inside K8s
 
 ```
-./bin/k8s-topo --create examples/builder/random.yml 
+k8s-topo --create examples/builder/random.yml 
 ```
 
 Optionally, you can generate a D3.js network topology graph 
 
 ```
-./bin/k8s-topo --graph examples/builder/random.yml 
+k8s-topo --graph examples/builder/random.yml 
 ```
 
-View the generated topology graph at `http://<any_k8s_cluster_node_ip>:32080`
+View the generated topology graph at `http://<any_k8s_cluster_node_ip>:32000`
 
 Verify that the topology has been deployed (from the master node)
 
@@ -273,37 +228,54 @@ Login the first node and verify connectivity to every other loopback
 
 ```
 $ qrtr-1
-/ # for i in `seq 1 20`; do ping -c 1 -W 2 198.51.100.$i|grep from; done
-64 bytes from 198.51.100.1: seq=0 ttl=64 time=0.052 ms
-64 bytes from 198.51.100.2: seq=0 ttl=58 time=0.428 ms
-64 bytes from 198.51.100.3: seq=0 ttl=63 time=0.274 ms
-64 bytes from 198.51.100.4: seq=0 ttl=62 time=0.271 ms
-64 bytes from 198.51.100.5: seq=0 ttl=58 time=0.528 ms
-64 bytes from 198.51.100.6: seq=0 ttl=58 time=0.560 ms
-64 bytes from 198.51.100.7: seq=0 ttl=59 time=0.502 ms
-64 bytes from 198.51.100.8: seq=0 ttl=57 time=0.470 ms
-64 bytes from 198.51.100.9: seq=0 ttl=57 time=0.564 ms
-64 bytes from 198.51.100.10: seq=0 ttl=61 time=0.267 ms
-64 bytes from 198.51.100.11: seq=0 ttl=56 time=0.544 ms
-64 bytes from 198.51.100.12: seq=0 ttl=63 time=0.280 ms
-64 bytes from 198.51.100.13: seq=0 ttl=62 time=0.358 ms
-64 bytes from 198.51.100.14: seq=0 ttl=61 time=0.380 ms
-64 bytes from 198.51.100.15: seq=0 ttl=64 time=0.154 ms
-64 bytes from 198.51.100.16: seq=0 ttl=60 time=0.379 ms
-64 bytes from 198.51.100.17: seq=0 ttl=59 time=0.356 ms
-64 bytes from 198.51.100.18: seq=0 ttl=59 time=0.307 ms
-64 bytes from 198.51.100.19: seq=0 ttl=60 time=0.260 ms
-64 bytes from 198.51.100.20: seq=0 ttl=58 time=0.466 ms
+/ # for i in `seq 0 20`; do echo "192.0.2.$i =>"  $(ping -c 1 -W 1 192.0.2.$i|grep loss); done
+192.0.2.0 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.1 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.2 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.3 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.4 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.5 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.6 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.7 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.8 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.9 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.10 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.11 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.12 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.13 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.14 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.15 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.16 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.17 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.18 => 1 packets transmitted, 1 packets received, 0% packet loss
+192.0.2.19 => 1 packets transmitted, 1 packets received, 0% packet loss
 ```
 
 Destroy the topology
 
 ```
-./bin/k8s-topo --destroy examples/builder/random.yml 
+k8s-topo --destroy examples/builder/random.yml 
 ```
 
 
 ## Troubleshooting
+
+There are two places to collect meshnet logs:
+
+1. Meshnet daemon logs can be collected outside of the Kubernetes cluster. For example, the below command will collect logs from all meshnet daemons using [stern](https://github.com/wercker/stern)
+
+
+```
+stern meshnet -n meshnet
+```
+
+2. Meshnet plugin (binary) logs can be collected on the respective Kubernetes nodes, e.g.
+
+```
+root@kind-worker:/# journalctl -u kubelet
+```
+
+---
 
 Each POD is supposed to run an `init-wait` container that waits for the right number of interface to be connected before passing the ball to the main container. However, sometimes, PODs restart resulting in the missing interfaces inside the main container process, since they may have been added *AFTER* the process that reads the container interface list (e.g. qemu-kvm for VM-based containers). This is the procedure I use to identify the cause of the failure:
 
@@ -313,3 +285,9 @@ Each POD is supposed to run an `init-wait` container that waits for the right nu
 4. Look for the peer container's failures using `kubectl get events --sort-by=.metadata.creationTimestamp'`
 5. Identify which k8s node this POD is running on `kubectl get pods  zhfer-scs1001-a -o yaml  | grep node`
 6. On that node check the `journalctl` for any errors associated with the POD
+
+
+
+
+[dynamic-client]: https://www.oreilly.com/library/view/programming-kubernetes/9781492047094/ch04.html
+[dynclient-example]: https://github.com/kubernetes/client-go/blob/611184f7c43ae2d520727f01d49620c7ed33412d/examples/dynamic-create-update-delete-deployment/main.go
