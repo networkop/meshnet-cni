@@ -1,7 +1,0 @@
----
-- hosts: k8s-cluster
-  gather_facts: False
-  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
-  roles:
-    - { role: meshnet }
-  
