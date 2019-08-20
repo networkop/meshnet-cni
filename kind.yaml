@@ -6,8 +6,9 @@ nodes:
 - role: worker
 - role: worker
 - role: worker
-- role: worker
-- role: worker
-- role: worker
-- role: worker
-- role: worker
+
+kubeadmConfigPatches:
+- |
+  apiVersion: kubelet.config.k8s.io/v1beta1
+  kind: KubeletConfiguration
+  MaxPods: 250
