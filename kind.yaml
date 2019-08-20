@@ -5,10 +5,10 @@ nodes:
 - role: control-plane
 - role: worker
 - role: worker
-- role: worker
-
 kubeadmConfigPatches:
 - |
   apiVersion: kubelet.config.k8s.io/v1beta1
   kind: KubeletConfiguration
-  MaxPods: 250
+  metadata:
+    name: config
+  maxPods: 253

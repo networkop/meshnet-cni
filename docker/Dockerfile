@@ -1,3 +1,18 @@
+FROM golang:1.12.7 AS proto_base
+
+ENV GO111MODULE=off
+RUN apt-get update && apt-get -y install curl unzip
+RUN curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v3.9.1/protoc-3.9.1-linux-x86_64.zip && \
+    unzip protoc-3.9.1-linux-x86_64.zip 
+RUN go get -u github.com/golang/protobuf/protoc-gen-go
+
+
+COPY daemon/ daemon/
+COPY Makefile .
+COPY .mk/ .mk/
+
+RUN make proto
+
 FROM golang:1.12.7 AS build_base
 
 WORKDIR /go/src/github.com/networkop/meshnet-cni
@@ -12,6 +27,7 @@ FROM build_base AS build
 
 COPY . .
 
+COPY --from=proto_base daemon/generated daemon/generated
 RUN CGO_ENABLED=0 GOOS=linux go build -o meshnet plugin/meshnet.go 
 RUN CGO_ENABLED=0 GOOS=linux go build -o meshnetd daemon/*.go
 

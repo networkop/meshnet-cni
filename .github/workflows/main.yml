@@ -11,11 +11,30 @@ jobs:
     - uses: actions/checkout@v1
     - name: Build a local test environment
       run: make local
+    - name: Build latest meshnet 
+      run: |
+        make build
+        make upload
       env:
-        GOPATH: ${HOME}/go
+        VERSION: latest
     - name: Install meshnet 
-      run: make install
+      run: make ci-install
+      env:
+        VERSION: latest
     - name: Wait for meshnet to install
-      run: kubectl wait --for condition=Ready pod -l name=meshnet -n meshnet   
+      run: make wait-for-meshnet
     - name: Run tests
       run: make test
+    - name: Build final version
+      run: make build
+    - name: Docker login
+      run: echo "${DOCKER_PASSWORD}" | docker login --username ${DOCKER_USERNAME} --password-stdin
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USER }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PWD }}
+    - name: Release final version
+      run: |
+        make build
+        make release
+      env:
+        VERSION: 0.2.0

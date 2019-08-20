@@ -177,7 +177,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err = types.LoadArgs(args.Args, &cniArgs); err != nil {
 		return err
 	}
-	log.SetPrefix(fmt.Sprintf("--| %s |==> ", cniArgs.K8S_POD_NAME))
+	log.SetPrefix(fmt.Sprintf("ADD| %s |==> ", cniArgs.K8S_POD_NAME))
 	log.Printf("Processing ADD POD in namespace %s", cniArgs.K8S_POD_NAMESPACE)
 
 	// Verifying and calling delegateAdd for the master plugin
@@ -434,7 +434,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	if err = types.LoadArgs(args.Args, &cniArgs); err != nil {
 		return err
 	}
-	log.SetPrefix(fmt.Sprintf("--| %s |==> ", cniArgs.K8S_POD_NAME))
+	log.SetPrefix(fmt.Sprintf("DEL | %s |==> ", cniArgs.K8S_POD_NAME))
 	log.Print("Processing DEL request")
 
 	conn, err := grpc.Dial(localDaemon, grpc.WithInsecure())

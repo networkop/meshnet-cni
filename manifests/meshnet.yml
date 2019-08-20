@@ -131,7 +131,7 @@ items:
           securityContext:
             privileged: true
           image: networkop/meshnet:0.2.0
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           resources:
             limits:
               memory: 200Mi
