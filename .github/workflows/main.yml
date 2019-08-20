@@ -1,0 +1,19 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v1
+    - name: Build a local test environment
+      run: make local
+    - name: Install meshnet 
+      run: make install
+    - name: Wait for meshnet to install
+      run: kubectl wait --for condition=Ready pod -l name=meshnet -n meshnet   
+    - name: Run tests
+      run: make test
