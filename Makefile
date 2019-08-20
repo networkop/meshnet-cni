@@ -7,16 +7,17 @@ DOCKERID = networkop
 
 export KUBECONFIG
 
-.PHONY: gengo test env upload meshnet stuff
+include ./kind.mk
 
+.PHONY: build gengo test upload meshnet stuff local wait-install
+
+build: meshnet
 
 all: proto meshnet
 
-local: 
-	-kind create cluster --config kind.yaml
-
-clean:
-	kind delete cluster
+local: kind-start
+	
+clean: kind-stop
 
 gengo:
 	sudo rm -rf ./pkg/client/*
@@ -37,8 +38,8 @@ upload:
 
 meshnet:
 	DOCKER_BUILDKIT=1 docker build -t meshnet -f docker/Dockerfile .
-	docker image tag meshnet $(DOCKERID)/meshnet:v$(VERSION)
-	docker image push $(DOCKERID)/meshnet:v$(VERSION)
+	docker image tag meshnet $(DOCKERID)/meshnet:$(VERSION)
+	docker image push $(DOCKERID)/meshnet:$(VERSION)
 
 
 proto:
@@ -47,13 +48,15 @@ proto:
 	--go_out=plugins=grpc:daemon/generated/
 
 
-test: env
+test: wait-install
 	kubectl apply -f tests/3node.yml
-	#while [[ $(kubectl get pods -l test=3node -o 'jsonpath={..status.conditions[?(@.type=="Ready")].status}') != "True" ]]; do echo "waiting for pod" && sleep 1; done
+	kubectl wait --for condition=Ready pod -l test=3node   
 	kubectl exec r1 -- ping -c 1 12.12.12.1
 	kubectl exec r1 -- ping -c 1 13.13.13.3
 	kubectl exec r2 -- ping -c 1 23.23.23.3
 
+wait-install:
+	kubectl wait --for condition=Ready pod -l name=meshnet -n meshnet   
 
 install:
 	kubectl apply -f manifests/meshnet.yml
