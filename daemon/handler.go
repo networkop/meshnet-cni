@@ -89,7 +89,11 @@ func (s *meshnetd) SetAlive(ctx context.Context, pod *pb.Pod) (*pb.BoolResponse,
 
 	_, err = s.updateStatus(result, pod.KubeNs)
 	if err != nil {
-		log.Errorf("Failed to update pod %s alive status", pod.Name)
+		log.WithFields(log.Fields{
+			"pod": result,
+			"err": err,
+			"function": "SetAlive"
+		})Errorf("Failed to update pod %s alive status", pod.Name)
 		return &pb.BoolResponse{Response: false}, nil
 	}
 
@@ -116,7 +120,11 @@ func (s *meshnetd) Skip(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolRespon
 
 	_, err = s.updateStatus(result, skip.KubeNs)
 	if err != nil {
-		log.Errorf("Failed to update pod %s alive status", skip.Pod)
+		log.WithFields(log.Fields{
+			"pod": result,
+			"err": err,
+			"function": "Skip"
+		})Errorf("Failed to update pod %s alive status", pod.Name)
 		return &pb.BoolResponse{Response: false}, nil
 	}
 
@@ -146,7 +154,12 @@ func (s *meshnetd) SkipReverse(ctx context.Context, skip *pb.SkipQuery) (*pb.Boo
 	// sending peer pod's updates to k8s
 	_, err = s.updateStatus(peerPod, skip.KubeNs)
 	if err != nil {
-		log.Errorf("Failed to update pod %s alive status", peerPod.GetName())
+		log.WithFields(log.Fields{
+			"pod": peerPod,
+			"err": err,
+			"function": "SkipReverse",
+			"This/Peer": "Peer"
+		})Errorf("Failed to update pod %s alive status", peerPod.GetName())
 		return &pb.BoolResponse{Response: false}, nil
 	}
 
@@ -176,7 +189,12 @@ func (s *meshnetd) SkipReverse(ctx context.Context, skip *pb.SkipQuery) (*pb.Boo
 	// sending this pod's updates to k8s
 	_, err = s.updateStatus(thisPod, skip.KubeNs)
 	if err != nil {
-		log.Errorf("Failed to update pod %s alive status", thisPod.GetName())
+		log.WithFields(log.Fields{
+			"pod": thisPod,
+			"err": err,
+			"function": "SkipReverse",
+			"This/That": "This"
+		})Errorf("Failed to update pod %s alive status", thisPod.GetName())
 		return &pb.BoolResponse{Response: false}, nil
 	}
 
