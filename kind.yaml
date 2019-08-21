@@ -5,6 +5,7 @@ nodes:
 - role: control-plane
 - role: worker
 - role: worker
+- role: worker
 kubeadmConfigPatches:
 - |
   apiVersion: kubelet.config.k8s.io/v1beta1
