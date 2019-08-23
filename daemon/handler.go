@@ -8,6 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/util/retry"
 )
 
 var gvr = schema.GroupVersionResource{
@@ -21,9 +22,10 @@ func (s *meshnetd) getPod(name, ns string) (*unstructured.Unstructured, error) {
 	return s.kube.Resource(gvr).Namespace(ns).Get(name, metav1.GetOptions{})
 }
 
-func (s *meshnetd) updateStatus(obj *unstructured.Unstructured, ns string) (*unstructured.Unstructured, error) {
+func (s *meshnetd) updateStatus(obj *unstructured.Unstructured, ns string) error {
 	log.Infof("Update pod status %s from K8s", obj.GetName())
-	return s.kube.Resource(gvr).Namespace(ns).UpdateStatus(obj, metav1.UpdateOptions{})
+	_, err := s.kube.Resource(gvr).Namespace(ns).UpdateStatus(obj, metav1.UpdateOptions{})
+	return err
 }
 
 func (s *meshnetd) Get(ctx context.Context, pod *pb.PodQuery) (*pb.Pod, error) {
@@ -73,28 +75,31 @@ func (s *meshnetd) Get(ctx context.Context, pod *pb.PodQuery) (*pb.Pod, error) {
 func (s *meshnetd) SetAlive(ctx context.Context, pod *pb.Pod) (*pb.BoolResponse, error) {
 	log.Infof("Setting %s's SrcIp=%s and NetNs=%s", pod.Name, pod.SrcIp, pod.NetNs)
 
-	result, err := s.getPod(pod.Name, pod.KubeNs)
-	if err != nil {
-		log.Errorf("Failed to read pod %s from K8s", pod.Name)
-		return nil, err
-	}
+	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		result, err := s.getPod(pod.Name, pod.KubeNs)
+		if err != nil {
+			log.Errorf("Failed to read pod %s from K8s", pod.Name)
+			return err
+		}
 
-	if err = unstructured.SetNestedField(result.Object, pod.SrcIp, "status", "src_ip"); err != nil {
-		log.Errorf("Failed to update pod's src_ip")
-	}
+		if err = unstructured.SetNestedField(result.Object, pod.SrcIp, "status", "src_ip"); err != nil {
+			log.Errorf("Failed to update pod's src_ip")
+		}
 
-	if err = unstructured.SetNestedField(result.Object, pod.NetNs, "status", "net_ns"); err != nil {
-		log.Errorf("Failed to update pod's net_ns")
-	}
+		if err = unstructured.SetNestedField(result.Object, pod.NetNs, "status", "net_ns"); err != nil {
+			log.Errorf("Failed to update pod's net_ns")
+		}
 
-	_, err = s.updateStatus(result, pod.KubeNs)
-	if err != nil {
+		err = s.updateStatus(result, pod.KubeNs)
+		return err
+	})
+
+	if retryErr != nil {
 		log.WithFields(log.Fields{
-			"pod": result,
-			"err": err,
-			"function": "SetAlive"
-		})Errorf("Failed to update pod %s alive status", pod.Name)
-		return &pb.BoolResponse{Response: false}, nil
+			"err": retryErr,
+			"function": "SetAlive",
+		}).Errorf("Failed to update pod %s alive status", pod.Name)
+		return &pb.BoolResponse{Response: false}, retryErr
 	}
 
 	return &pb.BoolResponse{Response: true}, nil
@@ -103,29 +108,31 @@ func (s *meshnetd) SetAlive(ctx context.Context, pod *pb.Pod) (*pb.BoolResponse,
 func (s *meshnetd) Skip(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolResponse, error) {
 	log.Infof("Skipping pod %s by pod %s", skip.Pod, skip.Peer)
 
-	result, err := s.getPod(skip.Pod, skip.KubeNs)
-	if err != nil {
-		log.Errorf("Failed to read pod %s from K8s", skip.Pod)
-		return nil, err
-	}
+	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		result, err := s.getPod(skip.Pod, skip.KubeNs)
+		if err != nil {
+			log.Errorf("Failed to read pod %s from K8s", skip.Pod)
+			return err
+		}
 
-	skipped, _, _ := unstructured.NestedSlice(result.Object, "status", "skipped")
+		skipped, _, _ := unstructured.NestedSlice(result.Object, "status", "skipped")
 
-	newSkipped := append(skipped, skip.Peer)
+		newSkipped := append(skipped, skip.Peer)
 
-	if err := unstructured.SetNestedField(result.Object, newSkipped, "status", "skipped"); err != nil {
-		log.Errorf("Failed to updated skipped list")
-		return nil, err
-	}
+		if err := unstructured.SetNestedField(result.Object, newSkipped, "status", "skipped"); err != nil {
+			log.Errorf("Failed to updated skipped list")
+			return err
+		}
 
-	_, err = s.updateStatus(result, skip.KubeNs)
-	if err != nil {
+		err = s.updateStatus(result, skip.KubeNs)
+		return err
+	})
+	if retryErr != nil {
 		log.WithFields(log.Fields{
-			"pod": result,
-			"err": err,
-			"function": "Skip"
-		})Errorf("Failed to update pod %s alive status", pod.Name)
-		return &pb.BoolResponse{Response: false}, nil
+			"err": retryErr,
+			"function": "Skip",
+		}).Errorf("Failed to update skip pod %s status", skip.Pod)
+		return &pb.BoolResponse{Response: false}, retryErr
 	}
 
 	return &pb.BoolResponse{Response: true}, nil
@@ -134,69 +141,98 @@ func (s *meshnetd) Skip(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolRespon
 func (s *meshnetd) SkipReverse(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolResponse, error) {
 	log.Infof("Reverse-skipping of pod %s by pod %s", skip.Pod, skip.Peer)
 
-	// setting the value for peer pod
-	peerPod, err := s.getPod(skip.Peer, skip.KubeNs)
-	if err != nil {
-		log.Errorf("Failed to read pod %s from K8s", skip.Pod)
-		return nil, err
-	}
+	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// setting the value for peer pod
+		peerPod, err := s.getPod(skip.Peer, skip.KubeNs)
+		if err != nil {
+			log.Errorf("Failed to read pod %s from K8s", skip.Pod)
+			return err
+		}
 
-	// extracting peer pod's skipped list and adding this pod's name to it
-	peerSkipped, _, _ := unstructured.NestedSlice(peerPod.Object, "status", "skipped")
-	newPeerSkipped := append(peerSkipped, skip.Pod)
-
-	// updating peer pod's skipped list locally
-	if err := unstructured.SetNestedField(peerPod.Object, newPeerSkipped, "status", "skipped"); err != nil {
-		log.Errorf("Failed to updated reverse-skipped list for peer pod %s", peerPod.GetName())
-		return nil, err
-	}
-
-	// sending peer pod's updates to k8s
-	_, err = s.updateStatus(peerPod, skip.KubeNs)
-	if err != nil {
 		log.WithFields(log.Fields{
 			"pod": peerPod,
-			"err": err,
 			"function": "SkipReverse",
-			"This/Peer": "Peer"
-		})Errorf("Failed to update pod %s alive status", peerPod.GetName())
-		return &pb.BoolResponse{Response: false}, nil
-	}
+			"This/That": "Peer",
+		}).Info("Original Peer pod")
+		// extracting peer pod's skipped list and adding this pod's name to it
+		peerSkipped, _, _ := unstructured.NestedSlice(peerPod.Object, "status", "skipped")
+		newPeerSkipped := append(peerSkipped, skip.Pod)
 
-	// setting the value for this pod
-	thisPod, err := s.getPod(skip.Pod, skip.KubeNs)
-	if err != nil {
-		log.Errorf("Failed to read pod %s from K8s", skip.Pod)
-		return nil, err
-	}
+		if len(newPeerSkipped) != 0 {
+			log.Infof("Updating peer skipped list")
+			// updating peer pod's skipped list locally
+			if err := unstructured.SetNestedField(peerPod.Object, newPeerSkipped, "status", "skipped"); err != nil {
+				log.Errorf("Failed to updated reverse-skipped list for peer pod %s", peerPod.GetName())
+				return err
+			}
 
-	// extracting this pod's skipped list and removing peer pod's name from it
-	thisSkipped, _, _ := unstructured.NestedSlice(thisPod.Object, "status", "skipped")
-	newThisSkipped := make([]interface{}, len(thisSkipped))
-
-	for _, el := range thisSkipped {
-		if el.(string) != skip.Peer {
-			newThisSkipped = append(newThisSkipped, el)
-		}
-	}
-
-	// updating this pod's skipped list locally
-	if err := unstructured.SetNestedField(thisPod.Object, newThisSkipped, "status", "skipped"); err != nil {
-		log.Errorf("Failed to cleanup skipped list for pod %s", thisPod.GetName())
-		return nil, err
-	}
-
-	// sending this pod's updates to k8s
-	_, err = s.updateStatus(thisPod, skip.KubeNs)
-	if err != nil {
+			// sending peer pod's updates to k8s
+			err = s.updateStatus(peerPod, skip.KubeNs)
+			return err
+		} 
+		return nil
+	})
+	if retryErr != nil {
 		log.WithFields(log.Fields{
-			"pod": thisPod,
-			"err": err,
+			"err": retryErr,
 			"function": "SkipReverse",
-			"This/That": "This"
-		})Errorf("Failed to update pod %s alive status", thisPod.GetName())
-		return &pb.BoolResponse{Response: false}, nil
+		}).Error("Failed to update peer pod %s skipreverse status")
+		return &pb.BoolResponse{Response: false}, retryErr
 	}
+	
+
+	retryErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// setting the value for this pod
+		thisPod, err := s.getPod(skip.Pod, skip.KubeNs)
+		if err != nil {
+			log.Errorf("Failed to read pod %s from K8s", skip.Pod)
+			return err
+		}
+
+
+		// extracting this pod's skipped list and removing peer pod's name from it
+		thisSkipped, _, _ := unstructured.NestedSlice(thisPod.Object, "status", "skipped")
+		newThisSkipped := make([]interface{}, 0)
+
+		log.WithFields(log.Fields{
+			"thisSkipped": thisSkipped,
+		}).Info("THIS SKIPPED:")
+
+		for _, el := range thisSkipped {
+			elString, ok := el.(string)
+			if ok {
+				if elString != skip.Peer {
+					log.Errorf("Appending new element %s", elString)
+					newThisSkipped = append(newThisSkipped, elString)
+				}
+			}
+		}
+
+		log.WithFields(log.Fields{
+			"newThisSkipped": newThisSkipped,
+		}).Info("NEW THIS SKIPPED:")
+
+		
+		// updating this pod's skipped list locally
+		if len(newThisSkipped) != 0 {
+			if err := unstructured.SetNestedField(thisPod.Object, newThisSkipped, "status", "skipped"); err != nil {
+				log.Errorf("Failed to cleanup skipped list for pod %s", thisPod.GetName())
+				return err
+			}
+
+			// sending this pod's updates to k8s
+			err = s.updateStatus(thisPod, skip.KubeNs)
+			return err
+		}
+		return nil
+	})
+	if retryErr != nil {
+		log.WithFields(log.Fields{
+			"err": retryErr,
+			"function": "SkipReverse",
+		}).Error("Failed to update this pod skipreverse status")
+		return &pb.BoolResponse{Response: false}, retryErr
+	}	
 
 	return &pb.BoolResponse{Response: true}, nil
 }

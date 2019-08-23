@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"runtime"
-	"time"
 
 	"log"
 
@@ -28,7 +27,6 @@ const (
 	defaultPort    = "51111"
 	localhost      = "localhost"
 	localDaemon    = localhost + ":" + defaultPort
-	requestTimeout = 20 * time.Second
 	macvlanMode    = netlink.MACVLAN_MODE_BRIDGE
 )
 
@@ -164,7 +162,8 @@ func delegateDel(ctx context.Context, netconf map[string]interface{}, intfName s
 
 // Adds interfaces to a POD
 func cmdAdd(args *skel.CmdArgs) error {
-	ctx, _ := context.WithTimeout(context.Background(), requestTimeout)
+	ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
 
 	log.Print("Parsing cni .conf file")
 	n, err := loadConf(args.StdinData)
@@ -191,6 +190,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	log.Print("Master plugin has finished")
+	log.Printf("Master plugin result is %+v", r)
 
 	// Finding the source IP and interface for VXLAN VTEP
 	srcIP, srcIntf, err := getVxlanSource()
@@ -331,7 +331,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 						log.Printf("Failed to read skipped status from our peer")
 						return err
 					}
-					log.Printf("Have we been skipped by our peer %s? %s", peerPod.Name, isSkipped)
+					log.Printf("Have we been skipped by our peer %s? %t", peerPod.Name, isSkipped)
 
 					// Comparing names to determine higher priority
 					higherPrio := localPod.Name > peerPod.Name
@@ -397,7 +397,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 					log.Printf("Failed to do a remote update")
 					return err
 				}
-
+				log.Printf("Successfully updated remote meshnet daemon")
 			}
 
 		} else { // This means that our peer pod hasn't come up yet
@@ -417,12 +417,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	}
 
+	log.Printf("Connected all links, exiting with result %+v", r)
+
 	return r.Print()
 }
 
 // Deletes interfaces from a POD
 func cmdDel(args *skel.CmdArgs) error {
-	ctx, _ := context.WithTimeout(context.Background(), requestTimeout)
+	ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
 	// Parsing cni .conf file
 	n, err := loadConf(args.StdinData)
 	if err != nil {
@@ -476,9 +479,10 @@ func cmdDel(args *skel.CmdArgs) error {
 			}
 
 			// Setting reversed skipped flag so that this pod will try to connect veth pair on restart
+			log.Printf("Setting skip-reverse flag on peer %s", link.PeerPod)
 			ok, err := meshnetClient.SkipReverse(ctx, &pb.SkipQuery{
-				Pod:    link.PeerPod,
-				Peer:   localPod.Name,
+				Pod:    localPod.Name,
+				Peer:   link.PeerPod,
 				KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
 			})
 			if err != nil || !ok.Response {

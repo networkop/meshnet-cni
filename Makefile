@@ -10,7 +10,7 @@ export KUBECONFIG
 include .mk/kind.mk
 include .mk/kustomize.mk
 
-.PHONY: build gengo test upload meshnet stuff local wait-for-meshnet ci-install ci-build
+.PHONY: build gengo test upload meshnet stuff local wait-for-meshnet ci-install ci-build uninstall
 
 build: meshnet
 
@@ -65,3 +65,6 @@ ci-install: kustomize
 
 install: 
 	kubectl apply -f manifests/meshnet.yml
+
+uninstall:
+	-kubectl delete -f manifests/meshnet.yml
