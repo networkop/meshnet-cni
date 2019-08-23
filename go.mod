@@ -15,7 +15,7 @@ require (
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/mux v1.6.2 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
-	github.com/networkop/koko v0.0.0-20190823120233-05e6499702b0
+	github.com/networkop/koko v0.8.2
 	github.com/onsi/ginkgo v1.9.0 // indirect
 	github.com/onsi/gomega v1.6.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
