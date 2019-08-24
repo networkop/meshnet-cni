@@ -90,8 +90,7 @@ func (s *meshnetd) SetAlive(ctx context.Context, pod *pb.Pod) (*pb.BoolResponse,
 			log.Errorf("Failed to update pod's net_ns")
 		}
 
-		err = s.updateStatus(result, pod.KubeNs)
-		return err
+		return s.updateStatus(result, pod.KubeNs)
 	})
 
 	if retryErr != nil {
@@ -106,7 +105,7 @@ func (s *meshnetd) SetAlive(ctx context.Context, pod *pb.Pod) (*pb.BoolResponse,
 }
 
 func (s *meshnetd) Skip(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolResponse, error) {
-	log.Infof("Skipping pod %s by pod %s", skip.Pod, skip.Peer)
+	log.Infof("Skipping of pod %s by pod %s", skip.Peer, skip.Pod)
 
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		result, err := s.getPod(skip.Pod, skip.KubeNs)
@@ -124,8 +123,7 @@ func (s *meshnetd) Skip(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolRespon
 			return err
 		}
 
-		err = s.updateStatus(result, skip.KubeNs)
-		return err
+		return s.updateStatus(result, skip.KubeNs)
 	})
 	if retryErr != nil {
 		log.WithFields(log.Fields{
@@ -139,7 +137,7 @@ func (s *meshnetd) Skip(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolRespon
 }
 
 func (s *meshnetd) SkipReverse(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolResponse, error) {
-	log.Infof("Reverse-skipping of pod %s by pod %s", skip.Pod, skip.Peer)
+	log.Infof("Reverse-skipping of pod %s by pod %s", skip.Peer, skip.Pod)
 
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// setting the value for peer pod
@@ -149,28 +147,19 @@ func (s *meshnetd) SkipReverse(ctx context.Context, skip *pb.SkipQuery) (*pb.Boo
 			return err
 		}
 
-		log.WithFields(log.Fields{
-			"pod": peerPod,
-			"function": "SkipReverse",
-			"This/That": "Peer",
-		}).Info("Original Peer pod")
 		// extracting peer pod's skipped list and adding this pod's name to it
 		peerSkipped, _, _ := unstructured.NestedSlice(peerPod.Object, "status", "skipped")
 		newPeerSkipped := append(peerSkipped, skip.Pod)
 
-		if len(newPeerSkipped) != 0 {
-			log.Infof("Updating peer skipped list")
-			// updating peer pod's skipped list locally
-			if err := unstructured.SetNestedField(peerPod.Object, newPeerSkipped, "status", "skipped"); err != nil {
-				log.Errorf("Failed to updated reverse-skipped list for peer pod %s", peerPod.GetName())
-				return err
-			}
-
-			// sending peer pod's updates to k8s
-			err = s.updateStatus(peerPod, skip.KubeNs)
+		log.Infof("Updating peer skipped list")
+		// updating peer pod's skipped list locally
+		if err := unstructured.SetNestedField(peerPod.Object, newPeerSkipped, "status", "skipped"); err != nil {
+			log.Errorf("Failed to updated reverse-skipped list for peer pod %s", peerPod.GetName())
 			return err
-		} 
-		return nil
+		}
+
+		// sending peer pod's updates to k8s
+		return s.updateStatus(peerPod, skip.KubeNs)
 	})
 	if retryErr != nil {
 		log.WithFields(log.Fields{
@@ -221,8 +210,7 @@ func (s *meshnetd) SkipReverse(ctx context.Context, skip *pb.SkipQuery) (*pb.Boo
 			}
 
 			// sending this pod's updates to k8s
-			err = s.updateStatus(thisPod, skip.KubeNs)
-			return err
+			return s.updateStatus(thisPod, skip.KubeNs)
 		}
 		return nil
 	})

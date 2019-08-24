@@ -68,3 +68,5 @@ install:
 
 uninstall:
 	-kubectl delete -f manifests/meshnet.yml
+
+github-ci: build clean local upload install test
