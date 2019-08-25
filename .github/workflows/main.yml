@@ -9,18 +9,14 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
+    - name: Build latest meshnet 
+      run: make build
     - name: Build a local test environment
       run: make local
-    - name: Build latest meshnet 
-      run: |
-        make build
-        make upload
-      env:
-        VERSION: latest
+    - name: Upload the new meshnet image
+      run: make upload
     - name: Install meshnet 
       run: make ci-install
-      env:
-        VERSION: latest
     - name: Wait for meshnet to install
       run: make wait-for-meshnet
     - name: Run tests
@@ -36,5 +32,3 @@ jobs:
       run: |
         make build
         make release
-      env:
-        VERSION: 0.2.0
