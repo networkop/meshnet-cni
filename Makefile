@@ -1,9 +1,20 @@
-VERSION  ?= 0.2.0
 DOCKERID ?= networkop
 CURRENT_DIR = $(shell pwd)
 PROJECT_MODULE = github.com/networkop/meshnet-cni
 KUBECONFIG = $(shell ${GOPATH}/kind get kubeconfig-path --name="kind")
 GOPATH = ${HOME}/go/bin
+
+ifdef GITHUB_REF
+	BRANCH ?= $(shell echo ${GITHUB_REF} | cut -d'/' -f3)
+else
+	BRANCH ?= $(shell git branch | grep \* | cut -d ' ' -f2)
+endif 
+
+ifeq ($(BRANCH), master)
+  VERSION ?= latest
+else
+  VERSION ?= $(BRANCH)
+endif
 
 export KUBECONFIG
 
@@ -61,7 +72,7 @@ test: wait-for-meshnet
 wait-for-meshnet:
 	kubectl wait --for condition=Ready pod -l name=meshnet -n meshnet   
 
-ci-install: kustomize
+ci-install: kind-wait-for-cni kustomize
 
 install: 
 	kubectl apply -f manifests/meshnet.yml
@@ -69,4 +80,5 @@ install:
 uninstall:
 	-kubectl delete -f manifests/meshnet.yml
 
-github-ci: build clean local upload install test
+github-ci: build clean local upload ci-install test
+
