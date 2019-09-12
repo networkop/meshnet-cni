@@ -14,9 +14,9 @@ if [ ! -f /etc/cni/net.d/00-meshnet.conf ]; then
   existing=$(ls -1 /etc/cni/net.d/ | egrep "flannel|weave|bridge|calico|contiv|cilium|cni|kindnet" | head -n1)
   have_plugin_section=$(sudo cat /etc/cni/net.d/$existing | jq '.plugins')
   if [ -z have_plugin_section ]; then
-    jq -s '.[1].delegate = (.[0].plugins[0])' /etc/cni/net.d/$existing /etc/cni/net.d/meshnet.conf | jq .[1] > /etc/cni/net.d/00-meshnet.conf
+    jq -s '.[1].delegate = (.[0].plugins[0])' /etc/cni/net.d/$existing /etc/cni/net.d/meshnet.conf | jq '.[1]' > /etc/cni/net.d/00-meshnet.conf
   else
-    jq -s '.[1].delegate = (.[0])' /etc/cni/net.d/$existing /etc/cni/net.d/meshnet.conf | jq .[1] > /etc/cni/net.d/00-meshnet.conf
+    jq -s '.[1].delegate = (.[0])' /etc/cni/net.d/$existing /etc/cni/net.d/meshnet.conf | jq '.[1]' > /etc/cni/net.d/00-meshnet.conf
   fi
 else
   echo "Re-using existing CNI config"

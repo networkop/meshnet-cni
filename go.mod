@@ -33,9 +33,9 @@ require (
 	google.golang.org/appengine v1.6.1 // indirect
 	google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55 // indirect
 	google.golang.org/grpc v1.23.0
-	gopkg.in/inf.v0 v0.9.1 // indirect
 	gotest.tools v2.2.0+incompatible // indirect
 	k8s.io/api v0.0.0-20190820101039-d651a1528133 // indirect
 	k8s.io/apimachinery v0.0.0-20190820100751-ac02f8882ef6
 	k8s.io/client-go v12.0.0+incompatible
+	sigs.k8s.io/kind v0.2.1 // indirect
 )
