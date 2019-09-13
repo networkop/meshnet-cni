@@ -130,7 +130,7 @@ items:
         - name: meshnet
           securityContext:
             privileged: true
-          image: networkop/meshnet:0.2.0
+          image: networkop/meshnet:latest
           imagePullPolicy: IfNotPresent
           resources:
             limits:

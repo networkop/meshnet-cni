@@ -74,11 +74,10 @@ wait-for-meshnet:
 
 ci-install: kind-wait-for-cni kustomize
 
-install: 
-	kubectl apply -f manifests/meshnet.yml
+install: kustomize
 
 uninstall:
-	-kubectl delete -f manifests/meshnet.yml
+	-kubectl delete -f manifests/base/meshnet.yml
 
 github-ci: build clean local upload ci-install test
 

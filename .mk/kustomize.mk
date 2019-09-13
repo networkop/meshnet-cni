@@ -12,6 +12,9 @@ kust-ensure:
 
 .PHONY: kustomize
 kustomize: kust-ensure 
-	@cd manifests/ && $(GOPATH)/kustomize edit set image $(DOCKERID)/meshnet:$(VERSION)
-	@$(GOPATH)/kustomize build manifests | kubectl apply -f -
+	@cd manifests/base/ && $(GOPATH)/kustomize edit set image $(DOCKERID)/meshnet:$(VERSION)
+	@$(GOPATH)/kustomize build manifests/base/ | kubectl apply -f -
 
+.PHONY: kustomize-kops
+kustomize-kops: kust-ensure 
+	@$(GOPATH)/kustomize build manifests/overlays/kops/ | kubectl apply -f -
