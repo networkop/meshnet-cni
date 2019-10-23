@@ -15,7 +15,7 @@ RUN make proto
 
 FROM golang:1.12.7 AS build_base
 
-WORKDIR /go/src/github.com/networkop/meshnet-cni
+WORKDIR /go/src/github.com/tahir24434/meshnet-cni
 ENV GO111MODULE=on
 
 COPY go.mod .
@@ -36,8 +36,8 @@ FROM alpine:latest
 
 RUN apk add --no-cache jq
 
-COPY --from=build /go/src/github.com/networkop/meshnet-cni/meshnet /
-COPY --from=build /go/src/github.com/networkop/meshnet-cni/meshnetd /
+COPY --from=build /go/src/github.com/tahir24434/meshnet-cni/meshnet /
+COPY --from=build /go/src/github.com/tahir24434/meshnet-cni/meshnetd /
 
 COPY etc/cni/net.d/meshnet.conf /
 COPY docker/entrypoint.sh /
