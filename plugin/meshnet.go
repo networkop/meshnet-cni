@@ -142,7 +142,6 @@ func delegateAdd(ctx context.Context, netconf map[string]interface{}, intfName s
 	return result, nil
 }
 
-
 // DelegateDel call
 func delegateDel(ctx context.Context, netconf map[string]interface{}, intfName string) error {
 	log.Printf("Calling delegateDel for %s", netconf["type"].(string))
@@ -159,27 +158,6 @@ func delegateDel(ctx context.Context, netconf map[string]interface{}, intfName s
 		return fmt.Errorf("Error invoking Delegate Del %v", err)
 	}
 	return nil
-}
-
-func physicalVxlanLinkAdd(netNS, linkName string, ip string, srcIntf string, peerPodIP string) (err error) {
-	log.Printf("Default route is via %s@%s", srcIP, srcIntf)
-
-	myVeth, err := makeVeth(netNS, linkName, ip)
-    if err != nil {
-        return err
-    }
-
-    vxlan := makeVxlan(srcIntf, peerPodIP, 5099)
-    if err = koko.MakeVxLan(*myVeth, *vxlan); err != nil {
-        log.Printf("Error when creating a Vxlan interface with koko: %s", err)
-        return err
-    }
-
-    if err = koko.MakeVxLan(*myVeth, *vxlan); err != nil {
-        log.Printf("Error when creating a Vxlan interface with koko: %s", err)
-        return err
-    }
-    return nil
 }
 
 // Adds interfaces to a POD
@@ -220,12 +198,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 	log.Printf("Default route is via %s@%s", srcIP, srcIntf)
-
-	r, err := physicalVxlanLinkAdd(args.netNS, "eth99", "100.40.4.99/24", srcIntf, "172.33.16.19/24")
-	if err != nil {
-		log.Printf("'delegate' plugin failed: %s", err)
-		return err
-	}
 
 	log.Printf("Attempting to connect to local meshnet daemon")
 	conn, err := grpc.Dial(localDaemon, grpc.WithInsecure())
