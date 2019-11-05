@@ -9,32 +9,22 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
+    - name: Build latest meshnet 
+      run: make build
     - name: Build a local test environment
       run: make local
-    - name: Build latest meshnet 
-      run: |
-        make build
-        make upload
-      env:
-        VERSION: latest
+    - name: Upload the new meshnet image
+      run: make upload
     - name: Install meshnet 
       run: make ci-install
-      env:
-        VERSION: latest
-    - name: Wait for meshnet to install
+    - name: Wait for meshnet to come up
       run: make wait-for-meshnet
     - name: Run tests
       run: make test
-    - name: Build final version
-      run: make build
     - name: Docker login
       run: echo "${DOCKER_PASSWORD}" | docker login --username ${DOCKER_USERNAME} --password-stdin
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USER }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PWD }}
     - name: Release final version
-      run: |
-        make build
-        make release
-      env:
-        VERSION: 0.2.0
+      run: make release

@@ -20,3 +20,6 @@ kind-start: kind-ensure
 	@$(GOPATH)/kind get clusters | grep $(KIND_CLUSTER_NAME)  >/dev/null 2>&1 || \
 		$(GOPATH)/kind create cluster --name "$(KIND_CLUSTER_NAME)" --config ./kind.yaml
 
+.PHONY: kind-wait-for-cni
+kind-wait-for-cni:
+	kubectl wait --timeout=60s --for condition=Ready pod -l name=weave-net -n kube-system
