@@ -254,7 +254,9 @@ func cmdAdd(args *skel.CmdArgs) error {
         }
         if strings.Contains(link.PeerPod, "phy") {
             log.Printf("Peer link is Physical host")
-            vxlan := makeVxlan(srcIntf, link.PeerIp, link.Uid)
+            log.Printf("LocalIntf=%s LocalIp=%s srcIntf=%s PeerIp=%s", link.LocalIntf, link.LocalIp, srcIntf, link.PeerIp)
+            remoteIp := strings.Split(link.PeerIp, "/")[0]
+            vxlan := makeVxlan(srcIntf, remoteIp, link.Uid)
             if err = koko.MakeVxLan(*myVeth, *vxlan); err != nil {
                 log.Printf("Error when creating a Vxlan interface with koko: %s", err)
                 return err
