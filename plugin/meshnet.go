@@ -7,7 +7,7 @@ import (
 	"net"
 	"os"
 	"runtime"
-
+    "strings"
 	"log"
 
 	"github.com/containernetworking/cni/pkg/invoke"
@@ -251,7 +251,16 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 			log.Printf("macvlan interfacee %s@%s has been added", link.LocalIntf, link.PeerIntf)
 			continue
-		}
+        }
+        if strings.Contains(link.PeerPod, "phy") {
+            log.Printf("Peer link is Physical host")
+            vxlan := makeVxlan(srcIntf, link.PeerIp, link.Uid)
+            if err = koko.MakeVxLan(*myVeth, *vxlan); err != nil {
+                log.Printf("Error when creating a Vxlan interface with koko: %s", err)
+                return err
+            }
+            continue
+        }
 
 		// Initialising peer pod's metadata
 		log.Printf("Retrieving peer pod %s information from meshnet daemon", link.PeerPod)
