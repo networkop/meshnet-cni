@@ -9,7 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/networkop/koko/api"
+	"github.com/redhat-nfvpe/koko/api"
 	pb "github.com/networkop/meshnet-cni/daemon/generated"
 	"github.com/vishvananda/netlink"
 )
