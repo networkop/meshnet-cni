@@ -15,7 +15,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/davecgh/go-spew/spew"
-	koko "github.com/networkop/koko/api"
+	koko "github.com/redhat-nfvpe/koko/api"
 	pb "github.com/networkop/meshnet-cni/daemon/generated"
 	"google.golang.org/grpc"
 
