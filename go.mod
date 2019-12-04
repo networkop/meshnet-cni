@@ -39,3 +39,5 @@ require (
 	k8s.io/client-go v12.0.0+incompatible
 	sigs.k8s.io/kind v0.2.1 // indirect
 )
+
+replace k8s.io/client-go => k8s.io/client-go v0.0.0-20190620085101-78d2af792bab
