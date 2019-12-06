@@ -143,6 +143,9 @@ items:
             mountPath: /etc/cni/net.d
           - name: cni-bin
             mountPath: /opt/cni/bin
+          - name: var-run-netns
+            mountPath: /var/run/netns
+            mountPropagation: Bidirectional
         terminationGracePeriodSeconds: 0
         volumes:
         - name: cni-bin
@@ -151,3 +154,6 @@ items:
         - name: cni-cfg
           hostPath:
             path: /etc/cni/net.d
+        - name: var-run-netns
+          hostPath:
+            path: /var/run/netns
