@@ -4,6 +4,6 @@ commonLabels:
   app: meshnet
 images:
 - name: networkop/meshnet
-  newTag: 0.2.0
+  newTag: latest
 resources:
 - meshnet.yml
