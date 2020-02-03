@@ -26,7 +26,7 @@ require (
 	golang.org/x/sys v0.0.0-20190813064441-fde4db37ae7a // indirect
 	google.golang.org/appengine v1.6.1 // indirect
 	google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55 // indirect
-	google.golang.org/grpc v1.24.0
+	google.golang.org/grpc v1.27.0
 	k8s.io/api v0.0.0-20190820101039-d651a1528133 // indirect
 	k8s.io/apimachinery v0.0.0-20190820100751-ac02f8882ef6
 	k8s.io/client-go v12.0.0+incompatible
