@@ -5,7 +5,7 @@ export KUBECONFIG=kubeconfig
 
 .PHONY: kind-install
 kind-install: 
-	GO111MODULE="on" go get sigs.k8s.io/kind@v0.2.1
+	GO111MODULE="on" go get sigs.k8s.io/kind@v0.7.0
 
 .PHONY: kind-stop
 kind-stop: 

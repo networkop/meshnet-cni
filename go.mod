@@ -6,6 +6,7 @@ require (
 	github.com/containernetworking/plugins v0.7.4
 	github.com/davecgh/go-spew v1.1.1
 	github.com/docker/go-connections v0.4.0 // indirect
+	github.com/golang/protobuf v1.4.2
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
@@ -17,6 +18,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45 // indirect
 	google.golang.org/appengine v1.6.1 // indirect
 	google.golang.org/grpc v1.27.0
+	google.golang.org/protobuf v1.24.0
 	k8s.io/apimachinery v0.17.0
 	k8s.io/client-go v12.0.0+incompatible
 	sigs.k8s.io/kind v0.2.1 // indirect

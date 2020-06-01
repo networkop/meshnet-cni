@@ -6,10 +6,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const (
-	defaultPort = 51111
-)
-
 func main() {
 
 	isDebug := flag.Bool("d", false, "enable degugging")
