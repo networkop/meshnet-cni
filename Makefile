@@ -1,7 +1,6 @@
 DOCKERID ?= networkop
 CURRENT_DIR = $(shell pwd)
 PROJECT_MODULE = github.com/networkop/meshnet-cni
-KUBECONFIG = $(shell ${GOPATH}/kind get kubeconfig-path --name="kind")
 GOPATH = ${HOME}/go/bin
 
 ifdef GITHUB_REF

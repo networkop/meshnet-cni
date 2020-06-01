@@ -4,6 +4,6 @@ commonLabels:
   app: meshnet
 images:
 - name: networkop/meshnet
-  newTag: latest
+  newTag: k8s-1-18-support
 resources:
 - meshnet.yml

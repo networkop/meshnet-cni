@@ -3,11 +3,11 @@ GOPATH = ${HOME}/go/bin
 
 .PHONY: kust-install
 kust-install: 
-	GO111MODULE="on" go install sigs.k8s.io/kustomize/kustomize/v3
+	GO111MODULE="on" go install sigs.k8s.io/kustomize/kustomize/v3@v3.5.4
 
 .PHONY: kust-ensure 
 kust-ensure: 
-	@which $(GOPATH)/kustomize >/dev/null 2>&1 || \
+	@which kustomize >/dev/null 2>&1 || \
 		make kust-install
 
 .PHONY: kustomize
