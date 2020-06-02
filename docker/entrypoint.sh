@@ -22,5 +22,8 @@ else
   echo "Re-using existing CNI config"
 fi
 
+echo 'Making sure the name is set for the master plugin'
+jq '.delegate.name = "masterplugin"' /etc/cni/net.d/00-meshnet.conf > /tmp/cni.conf && mv /tmp/cni.conf /etc/cni/net.d/00-meshnet.conf  
+
 echo "Starting meshnetd daemon"
 /meshnetd

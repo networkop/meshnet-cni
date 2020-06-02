@@ -9,6 +9,10 @@ type meshnetConf struct {
 	GRPCPort int
 }
 
+const (
+	defaultPort = 51111
+)
+
 func loadConfigVars() *meshnetConf {
 
 	config := meshnetConf{}

@@ -1,3 +1,4 @@
 cache/
 main.go
 .vscode
+.envrc
