@@ -20,6 +20,7 @@ include .mk/kind.mk
 include .mk/ci.mk
 include .mk/kustomize.mk
 
+.PHONY: build gengo test upload meshnet stuff local wait-for-meshnet ci-install ci-build uninstall
 
 build: meshnet
 
@@ -62,7 +63,7 @@ proto:
 
 test: wait-for-meshnet
 	kubectl apply -f tests/3node.yml
-	kubectl wait --timeout=60s --for condition=Ready pod -l test=3node 
+	kubectl wait --timeout=120s --for condition=Ready pod -l test=3node 
 	kubectl exec r1 -- ping -c 1 12.12.12.1
 	kubectl exec r1 -- ping -c 1 13.13.13.3
 	kubectl exec r2 -- ping -c 1 23.23.23.3
@@ -78,5 +79,5 @@ install: kustomize
 uninstall:
 	-kubectl delete -f manifests/base/meshnet.yml
 
-github-ci: kust-install build clean local upload ci-install test
+github-ci: kust-ensure build clean local upload ci-install test
 
