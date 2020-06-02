@@ -78,5 +78,5 @@ install: kustomize
 uninstall:
 	-kubectl delete -f manifests/base/meshnet.yml
 
-github-ci: build clean local upload ci-install test
+github-ci: kust-install build clean local upload ci-install test
 

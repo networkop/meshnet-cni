@@ -8,7 +8,7 @@ kust-install:
 
 .PHONY: kust-ensure 
 kust-ensure: 
-	@which kustomize >/dev/null 2>&1 || \
+	@which $(GOPATH)/kustomize >/dev/null 2>&1 || \
 		make kust-install
 
 .PHONY: kustomize
@@ -18,4 +18,4 @@ kustomize: kust-ensure
 
 .PHONY: kustomize-kops
 kustomize-kops: kust-ensure 
-	ubectl apply -k manifests/overlays/kops/ 
+	kubectl apply -k manifests/overlays/kops/ 
