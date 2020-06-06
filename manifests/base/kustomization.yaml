@@ -4,6 +4,6 @@ commonLabels:
   app: meshnet
 images:
 - name: networkop/meshnet
-  newTag: latest
+  newTag: k3d-test
 resources:
 - meshnet.yml

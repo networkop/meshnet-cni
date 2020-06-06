@@ -18,11 +18,13 @@ endif
 
 include .mk/kind.mk
 include .mk/ci.mk
+include .mk/k3d.mk
 include .mk/kustomize.mk
 
-.PHONY: build gengo test upload meshnet stuff local wait-for-meshnet ci-install ci-build uninstall
+.PHONY: build gengo test upload image stuff local wait-for-meshnet ci-install ci-build uninstall
 
-build: meshnet
+build: 
+	DOCKER_BUILDKIT=1 docker build -t meshnet -f docker/Dockerfile .
 
 local: kind-start
 	
@@ -49,8 +51,9 @@ local-build:
 upload:
 	$(GOPATH)/kind load docker-image $(DOCKERID)/meshnet:$(VERSION)
 
-meshnet:
-	DOCKER_BUILDKIT=1 docker build -t meshnet -f docker/Dockerfile .
+
+
+image: 
 	docker image tag meshnet $(DOCKERID)/meshnet:$(VERSION)
 
 release:
@@ -79,5 +82,5 @@ install: kustomize
 uninstall:
 	-kubectl delete -f manifests/base/meshnet.yml
 
-github-ci: kust-ensure build clean local upload ci-install test
+github-ci: kust-ensure build image clean local upload ci-install test
 

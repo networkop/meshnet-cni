@@ -146,6 +146,10 @@ items:
           - name: var-run-netns
             mountPath: /var/run/netns
             mountPropagation: Bidirectional
+          - name: cni-bin-alt
+            mountPath: /bin
+          - name: cni-cfg-alt
+            mountPath: /var/lib
         terminationGracePeriodSeconds: 0
         volumes:
         - name: cni-bin
@@ -157,4 +161,9 @@ items:
         - name: var-run-netns
           hostPath:
             path: /var/run/netns
-
+        - name: cni-bin-alt
+          hostPath:
+            path: /bin
+        - name: cni-cfg-alt
+          hostPath:
+            path: /var/lib
