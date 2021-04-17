@@ -174,6 +174,10 @@ During the initial installation process, meshnet will try to merge the existing 
 
 In some cases, Kubernetes distros may store CNI configuration files and binaries in non-standard directories and override them with `--cni-bin-dir` and `--cni-conf-dir` flags. In order to install meshnet into the right directories, create a new overlay under `manifests/overlays` and patch the `cni-dir` or `cni-bin` volumes with the correct location. See [kops overlay](manifests/overlays/kops) for an example.
 
+### Resilient topologies
+
+If you need to have Pods restarted and re-scheduled by the kube-controller, it's possible to deploy them as StatefulSets with replica number = 1. See [this example](/tests/2node-sts.yml).
+
 ### Examples
 
 Inside the `tests` directory there are 4 manifests with the following test topologies
