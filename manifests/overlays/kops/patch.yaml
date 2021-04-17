@@ -1,16 +1,13 @@
 ---
-apiVersion: v1
-kind: List
-items:
-- apiVersion: apps/v1
-  kind: DaemonSet
-  metadata:
-    name: meshnet
-    namespace: meshnet
-  spec:
-    template:
-      spec:
-        volumes:
-        - name: cni-bin
-          hostPath:
-            path: /home/kubernetes/bin
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: meshnet
+  namespace: meshnet
+spec:
+  template:
+    spec:
+      volumes:
+      - name: cni-bin
+        hostPath:
+          path: /home/kubernetes/bin

@@ -1,67 +1,67 @@
-DOCKERID ?= networkop
-CURRENT_DIR = $(shell pwd)
-PROJECT_MODULE = github.com/networkop/meshnet-cni
-GOPATH = ${HOME}/go/bin
+DOCKER_IMAGE := networkop/meshnet
+GOPATH ?= ${HOME}/go/bin
+ARCHS := "linux/amd64,linux/arm64"
+#ARCHS := "linux/amd64"
 
-ifdef GITHUB_REF
-	BRANCH ?= $(shell echo ${GITHUB_REF} | cut -d'/' -f3)
-else
-	BRANCH ?= $(shell git branch | grep \* | cut -d ' ' -f2)
-endif 
-
-ifeq ($(BRANCH), master)
-  VERSION ?= latest
-else
-  VERSION ?= $(BRANCH)
-endif
+COMMIT := $(shell git describe --dirty --always)
+TAG := $(shell git describe --tags --dirty || echo latest)
 
 
 include .mk/kind.mk
 include .mk/ci.mk
 include .mk/kustomize.mk
+include .mk/buf.mk
 
-.PHONY: build gengo test upload meshnet stuff local wait-for-meshnet ci-install ci-build uninstall
+.PHONY: all
+all: docker
 
-build: meshnet
+## Run unit tests
+test:
+	go test ./...
 
-local: kind-start
-	
-clean: kind-stop
-
-gengo:
-	sudo rm -rf ./pkg/client/*
-	sudo rm -rf ./pkg/apis/networkop/v1beta1/zz_generated.deepcopy.go
-	docker build -f ./hack/Dockerfile -t kubernetes-codegen:latest $(CURRENT_DIR)
-	docker run --rm -v "${CURRENT_DIR}:/go/src/${PROJECT_MODULE}" \
-           kubernetes-codegen:latest ./generate-groups.sh all \
-		   $(PROJECT_MODULE)/pkg/client \
-		   $(PROJECT_MODULE)/pkg/apis \
-		   networkop:v1beta1
-
-stuff:
-	go run main.go
-
-.PHONY: 
+# Build local binaries
 local-build:
-	CGO_ENABLED=0 GOOS=linux go build -o meshnet plugin/meshnet.go plugin/kube.go
+	CGO_ENABLED=0 GOOS=linux go build -o meshnet plugin/meshnet.go 
 	CGO_ENABLED=0 GOOS=linux go build -o meshnetd daemon/*.go
 
-upload:
-	$(GOPATH)/kind load docker-image $(DOCKERID)/meshnet:$(VERSION)
+.PHONY: docker
+## Build the docker image
+docker:
+	@echo 'Creating docker image ${DOCKER_IMAGE}:${COMMIT}'
+	@docker buildx create --use --name=multiarch --node multiarch && \
+	docker buildx build --load \
+	  --build-arg LDFLAGS=${LDFLAGS} \
+	  --platform "linux/amd64" \
+	  --tag ${DOCKER_IMAGE}:${COMMIT} \
+	  -f docker/Dockerfile \
+	  .
 
-meshnet:
-	DOCKER_BUILDKIT=1 docker build -t meshnet -f docker/Dockerfile .
-	docker image tag meshnet $(DOCKERID)/meshnet:$(VERSION)
+.PHONY: release
+## Release the current code with git tag and `latest`
+release: 
+	docker buildx build --push \
+		--build-arg LDFLAGS=${LDFLAGS} \
+		--platform ${ARCHS} \
+		-t ${DOCKER_IMAGE}:${TAG} \
+		-t ${DOCKER_IMAGE}:latest \
+		.
 
-release:
-	docker image push $(DOCKERID)/meshnet:$(VERSION)
+## Generate GRPC code
+proto: buf-generate
 
-proto:
-	rm -rf ./daemon/generated/meshnet.pb.go
-	protoc -I daemon/definitions daemon/definitions/meshnet.proto \
-	--go_out=plugins=grpc:daemon/generated/
+## Targets below are for integration testing only
 
-test: wait-for-meshnet
+.PHONY: up
+## Build test environment
+up: kind-start
+
+.PHONY: down
+## Desroy test environment
+down: kind-stop
+
+.PHONY: e2e
+## Run the end-to-end test
+e2e: wait-for-meshnet
 	kubectl apply -f tests/3node.yml
 	kubectl wait --timeout=120s --for condition=Ready pod -l test=3node 
 	kubectl exec r1 -- ping -c 1 12.12.12.1
@@ -72,12 +72,19 @@ wait-for-meshnet:
 	kubectl wait --for condition=Ready pod -l name=meshnet -n meshnet   
 	sleep 5
 
-ci-install: kind-wait-for-cni kustomize
+.PHONY: install
+## Install meshnet into a test cluster
+install: kind-load kind-wait-for-cni kustomize kind-connect
+	kustomize build manifests/overlays/e2e  | kubectl apply -f -
 
-install: kustomize
+.PHONY: uninstall
+## Uninstall meshnet from a test cluster
+uninstall: kind-connect
+	-kustomize build manifests/overlays/e2e  | kubectl delete -f -
 
-uninstall:
-	-kubectl delete -f manifests/base/meshnet.yml
+github-ci: kust-ensure build clean local upload install e2e
 
-github-ci: kust-ensure build clean local upload ci-install test
 
+# From: https://gist.github.com/klmr/575726c7e05d8780505a
+help:
+	@echo "$$(tput sgr0)";sed -ne"/^## /{h;s/.*//;:d" -e"H;n;s/^## //;td" -e"s/:.*//;G;s/\\n## /---/;s/\\n/ /g;p;}" ${MAKEFILE_LIST}|awk -F --- -v n=$$(tput cols) -v i=15 -v a="$$(tput setaf 6)" -v z="$$(tput sgr0)" '{printf"%s%*s%s ",a,-i,$$1,z;m=split($$2,w," ");l=n-i;for(j=1;j<=m;j++){l-=length(w[j])+1;if(l<= 0){l=n-i-length(w[j])-1;printf"\n%*s ",-i," ";}printf"%s ",w[j];}printf"\n";}'

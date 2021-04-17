@@ -5,13 +5,16 @@ import (
 	"log"
 	"net"
 
-	pb "github.com/networkop/meshnet-cni/daemon/generated"
+	"github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
+	pb "github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"k8s.io/client-go/dynamic"
 )
 
 type meshnetd struct {
+	v1beta1.UnimplementedLocalServer
+	v1beta1.UnimplementedRemoteServer
 	config *meshnetConf
 	kube   dynamic.Interface
 }

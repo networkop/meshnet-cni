@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	pb "github.com/networkop/meshnet-cni/daemon/generated"
+	pb "github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -95,7 +95,7 @@ func (s *meshnetd) SetAlive(ctx context.Context, pod *pb.Pod) (*pb.BoolResponse,
 
 	if retryErr != nil {
 		log.WithFields(log.Fields{
-			"err": retryErr,
+			"err":      retryErr,
 			"function": "SetAlive",
 		}).Errorf("Failed to update pod %s alive status", pod.Name)
 		return &pb.BoolResponse{Response: false}, retryErr
@@ -127,7 +127,7 @@ func (s *meshnetd) Skip(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolRespon
 	})
 	if retryErr != nil {
 		log.WithFields(log.Fields{
-			"err": retryErr,
+			"err":      retryErr,
 			"function": "Skip",
 		}).Errorf("Failed to update skip pod %s status", skip.Pod)
 		return &pb.BoolResponse{Response: false}, retryErr
@@ -139,6 +139,7 @@ func (s *meshnetd) Skip(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolRespon
 func (s *meshnetd) SkipReverse(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolResponse, error) {
 	log.Infof("Reverse-skipping of pod %s by pod %s", skip.Peer, skip.Pod)
 
+	var podName string
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// setting the value for peer pod
 		peerPod, err := s.getPod(skip.Peer, skip.KubeNs)
@@ -146,6 +147,7 @@ func (s *meshnetd) SkipReverse(ctx context.Context, skip *pb.SkipQuery) (*pb.Boo
 			log.Errorf("Failed to read pod %s from K8s", skip.Pod)
 			return err
 		}
+		podName = peerPod.GetName()
 
 		// extracting peer pod's skipped list and adding this pod's name to it
 		peerSkipped, _, _ := unstructured.NestedSlice(peerPod.Object, "status", "skipped")
@@ -163,12 +165,11 @@ func (s *meshnetd) SkipReverse(ctx context.Context, skip *pb.SkipQuery) (*pb.Boo
 	})
 	if retryErr != nil {
 		log.WithFields(log.Fields{
-			"err": retryErr,
+			"err":      retryErr,
 			"function": "SkipReverse",
-		}).Error("Failed to update peer pod %s skipreverse status")
+		}).Errorf("Failed to update peer pod %s skipreverse status", podName)
 		return &pb.BoolResponse{Response: false}, retryErr
 	}
-	
 
 	retryErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// setting the value for this pod
@@ -177,7 +178,6 @@ func (s *meshnetd) SkipReverse(ctx context.Context, skip *pb.SkipQuery) (*pb.Boo
 			log.Errorf("Failed to read pod %s from K8s", skip.Pod)
 			return err
 		}
-
 
 		// extracting this pod's skipped list and removing peer pod's name from it
 		thisSkipped, _, _ := unstructured.NestedSlice(thisPod.Object, "status", "skipped")
@@ -201,7 +201,6 @@ func (s *meshnetd) SkipReverse(ctx context.Context, skip *pb.SkipQuery) (*pb.Boo
 			"newThisSkipped": newThisSkipped,
 		}).Info("NEW THIS SKIPPED:")
 
-		
 		// updating this pod's skipped list locally
 		if len(newThisSkipped) != 0 {
 			if err := unstructured.SetNestedField(thisPod.Object, newThisSkipped, "status", "skipped"); err != nil {
@@ -216,11 +215,11 @@ func (s *meshnetd) SkipReverse(ctx context.Context, skip *pb.SkipQuery) (*pb.Boo
 	})
 	if retryErr != nil {
 		log.WithFields(log.Fields{
-			"err": retryErr,
+			"err":      retryErr,
 			"function": "SkipReverse",
 		}).Error("Failed to update this pod skipreverse status")
 		return &pb.BoolResponse{Response: false}, retryErr
-	}	
+	}
 
 	return &pb.BoolResponse{Response: true}, nil
 }

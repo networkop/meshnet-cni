@@ -9,8 +9,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	pb "github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
 	"github.com/redhat-nfvpe/koko/api"
-	pb "github.com/networkop/meshnet-cni/daemon/generated"
 	"github.com/vishvananda/netlink"
 )
 
@@ -134,4 +134,17 @@ func getVxlanSource() (srcIP, srcIntf string, err error) {
 	srcIntf = link.Attrs().Name
 
 	return
+}
+
+func vxlanDifferent(l1 *netlink.Vxlan, l2 api.VxLan) bool {
+
+	if l1.VxlanId != l2.ID {
+		return false
+	}
+
+	if !l1.Group.Equal(l2.IPAddr) {
+		return false
+	}
+
+	return true
 }

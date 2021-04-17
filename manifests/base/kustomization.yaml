@@ -1,9 +1,11 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+namespace: meshnet
 commonLabels:
   app: meshnet
-images:
-- name: networkop/meshnet
-  newTag: latest
 resources:
-- meshnet.yml
+- namespace.yaml
+- serviceaccount.yaml
+- crd.yaml
+- rbac.yaml
+- daemonset.yaml

@@ -1,5 +1,9 @@
 syntax = "proto3";
-package meshnet.rpc.v1beta1;
+
+package meshnet.v1beta1;
+
+// The Go package name is the version.
+option go_package = "github.com/networkop/meshnet/v1beta1";
 
 message Pod {
     string name = 1;
