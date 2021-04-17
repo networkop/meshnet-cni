@@ -15,19 +15,19 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/davecgh/go-spew/spew"
+	pb "github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
 	koko "github.com/redhat-nfvpe/koko/api"
-	pb "github.com/networkop/meshnet-cni/daemon/generated"
 	"google.golang.org/grpc"
 
 	"github.com/vishvananda/netlink"
 )
 
 const (
-	vxlanBase      = 5000
-	defaultPort    = "51111"
-	localhost      = "localhost"
-	localDaemon    = localhost + ":" + defaultPort
-	macvlanMode    = netlink.MACVLAN_MODE_BRIDGE
+	vxlanBase   = 5000
+	defaultPort = "51111"
+	localhost   = "localhost"
+	localDaemon = localhost + ":" + defaultPort
+	macvlanMode = netlink.MACVLAN_MODE_BRIDGE
 )
 
 type netConf struct {
@@ -163,7 +163,7 @@ func delegateDel(ctx context.Context, netconf map[string]interface{}, intfName s
 // Adds interfaces to a POD
 func cmdAdd(args *skel.CmdArgs) error {
 	ctx, cancel := context.WithCancel(context.Background())
-    defer cancel()
+	defer cancel()
 
 	log.Print("Parsing cni .conf file")
 	n, err := loadConf(args.StdinData)
@@ -331,7 +331,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 						log.Printf("Failed to read skipped status from our peer")
 						return err
 					}
-					log.Printf("Have we been skipped by our peer %s? %t", peerPod.Name, isSkipped)
+					log.Printf("Have we been skipped by our peer %s? %t", peerPod.Name, isSkipped.Response)
 
 					// Comparing names to determine higher priority
 					higherPrio := localPod.Name > peerPod.Name
@@ -425,7 +425,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 // Deletes interfaces from a POD
 func cmdDel(args *skel.CmdArgs) error {
 	ctx, cancel := context.WithCancel(context.Background())
-    defer cancel()
+	defer cancel()
 	// Parsing cni .conf file
 	n, err := loadConf(args.StdinData)
 	if err != nil {

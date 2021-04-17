@@ -148,7 +148,7 @@ The following manifest will create all that's required for meshnet plugin to fun
 * A daemonset with meshnet plugin and configuration files
 
 ```
-kubectl apply -f manifests/meshnet.yml
+kubectl apply -k manifests/base
 ```
 
 #### Interaction with existing resources
@@ -169,6 +169,10 @@ During the initial installation process, meshnet will try to merge the existing 
   }
 }
 ```
+
+### Cusomising installation paths
+
+In some cases, Kubernetes distros may store CNI configuration files and binaries in non-standard directories and override them with `--cni-bin-dir` and `--cni-conf-dir` flags. In order to install meshnet into the right directories, create a new overlay under `manifests/overlays` and patch the `cni-dir` or `cni-bin` volumes with the correct location. See [kops overlay](manifests/overlays/kops) for an example.
 
 ### Examples
 
