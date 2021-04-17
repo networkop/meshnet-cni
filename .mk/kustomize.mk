@@ -9,7 +9,7 @@ kust-ensure:
 
 .PHONY: kustomize
 kustomize: kust-ensure
-	@cd manifests/overlays/e2e && $(GOPATH)/kustomize edit set image ${DOCKER_IMAGE}:${COMMIT}	
+	cd manifests/overlays/e2e && $(GOPATH)/kustomize edit set image ${DOCKER_IMAGE}:${COMMIT}
 
 .PHONY: kustomize-kops
 kustomize-kops: kust-ensure 

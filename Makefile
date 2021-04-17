@@ -75,12 +75,12 @@ wait-for-meshnet:
 .PHONY: install
 ## Install meshnet into a test cluster
 install: kind-load kind-wait-for-cni kustomize kind-connect
-	kubectl apply -k manifests/overlays/e2e
+	kustomize build manifests/overlays/e2e  | kubectl apply -f -
 
 .PHONY: uninstall
 ## Uninstall meshnet from a test cluster
 uninstall: kind-connect
-	-kubectl delete -k manifests/overlays/e2e
+	-kustomize build manifests/overlays/e2e  | kubectl delete -f -
 
 github-ci: kust-ensure build clean local upload install e2e
 
