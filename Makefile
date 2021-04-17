@@ -44,6 +44,7 @@ release:
 		--platform ${ARCHS} \
 		-t ${DOCKER_IMAGE}:${TAG} \
 		-t ${DOCKER_IMAGE}:latest \
+		-f docker/Dockerfile \
 		.
 
 ## Generate GRPC code
