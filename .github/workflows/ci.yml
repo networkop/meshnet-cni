@@ -30,7 +30,7 @@ jobs:
         run: make docker
 
       - name: Build e2e test env
-        run: make env-up
+        run: make up
 
       - name: Install meshnet
         run: make install
