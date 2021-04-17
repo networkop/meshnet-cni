@@ -28,7 +28,7 @@ local-build:
 ## Build the docker image
 docker:
 	@docker buildx create --use --name=multiarch --node multiarch && \
-	docker buildx build \
+	docker buildx build --load \
 	  --build-arg LDFLAGS=${LDFLAGS} \
 	  --platform "linux/amd64" \
 	  --tag ${DOCKER_IMAGE}:${COMMIT} \
