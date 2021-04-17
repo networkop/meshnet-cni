@@ -27,6 +27,7 @@ local-build:
 .PHONY: docker
 ## Build the docker image
 docker:
+	@echo 'Creating docker image ${DOCKER_IMAGE}:${COMMIT}'
 	@docker buildx create --use --name=multiarch --node multiarch && \
 	docker buildx build --load \
 	  --build-arg LDFLAGS=${LDFLAGS} \
