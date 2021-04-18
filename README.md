@@ -1,5 +1,8 @@
 [![Actions Status](https://github.com/networkop/meshnet-cni/workflows/CI/badge.svg)](https://github.com/networkop/meshnet-cni/actions)
 [![Docker Pulls](https://img.shields.io/docker/pulls/networkop/meshnet.svg)](https://img.shields.io/docker/pulls/networkop/meshnet)
+[![Go Report Card](https://goreportcard.com/badge/github.com/networkop/meshnet-cni)](https://goreportcard.com/report/github.com/networkop/meshnet-cni)
+[![GoDoc](https://godoc.org/istio.io/istio?status.svg)](https://pkg.go.dev/github.com/networkop/meshnet-cni)
+[![License: BSD](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
 # meshnet CNI 
 
