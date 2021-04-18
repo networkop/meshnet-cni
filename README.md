@@ -89,7 +89,13 @@ Below is the order of operation of the plugin from the perspective of kube-node-
 Clone this project and build a local 3-node Kubernetes cluster
 
 ```
-make local
+make up
+```
+
+Build the meshnet-cni docker image
+
+```
+make docker
 ```
 
 Install meshnet-cni plugin
@@ -137,7 +143,7 @@ kubectl delete --grace-period=0 --force -f tests/3node.yml
 Destroy the local kind cluster
 
 ```
-make clean
+make down
 ```
 
 
@@ -299,7 +305,7 @@ Each POD is supposed to run an `init-wait` container that waits for the right nu
 2. Identify which interface is missing or was added last.
 3. Identify the correlation between the pair of containers interconnected by the missing interface
 4. Look for the peer container's failures using `kubectl get events --sort-by=.metadata.creationTimestamp'`
-5. Identify which k8s node this POD is running on `kubectl get pods  zhfer-scs1001-a -o yaml  | grep node`
+5. Identify which k8s node this POD is running on `kubectl get pods acme-scs1001-a -o yaml  | grep node`
 6. On that node check the `journalctl` for any errors associated with the POD
 
 

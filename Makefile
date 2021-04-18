@@ -4,7 +4,7 @@ ARCHS := "linux/amd64,linux/arm64"
 #ARCHS := "linux/amd64"
 
 COMMIT := $(shell git describe --dirty --always)
-TAG := $(shell git describe --tags --dirty || echo latest)
+TAG := $(shell git describe --tags --abbrev=0 || echo latest)
 
 
 include .mk/kind.mk
