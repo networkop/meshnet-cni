@@ -7,7 +7,7 @@ import (
 	"net"
 	"os"
 	"runtime"
-
+    "strings"
 	"log"
 
 	"github.com/containernetworking/cni/pkg/invoke"
@@ -250,6 +250,18 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return err
 			}
 			log.Printf("macvlan interfacee %s@%s has been added", link.LocalIntf, link.PeerIntf)
+			continue
+		}
+		// If peer endpoint is a 'physical' device running outside of our k8s cluster, then all we need to do is to
+		// create a vxlan link on our pod. Use ip in 'phy' endpoint as 'remote' VTEP of vxlan.
+		if strings.Contains(link.PeerPod, "phy") {
+			log.Printf("Peer link is Physical host")
+			remoteIp := strings.Split(link.PeerIp, "/")[0]
+			vxlan := makeVxlan(srcIntf, remoteIp, link.Uid)
+			if err = koko.MakeVxLan(*myVeth, *vxlan); err != nil {
+				log.Printf("Error when creating a Vxlan interface with koko: %s", err)
+				return err
+			}
 			continue
 		}
 
