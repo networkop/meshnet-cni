@@ -4,6 +4,7 @@ import (
 	"context"
 
 	pb "github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
+	"github.com/networkop/meshnet-cni/daemon/vxlan"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -245,7 +246,7 @@ func (s *meshnetd) IsSkipped(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolR
 }
 
 func (s *meshnetd) Update(ctx context.Context, pod *pb.RemotePod) (*pb.BoolResponse, error) {
-	if err := createOrUpdateVxlan(pod); err != nil {
+	if err := vxlan.CreateOrUpdate(pod); err != nil {
 		log.Errorf("Failed to Update Vxlan")
 		return &pb.BoolResponse{Response: false}, nil
 	}
