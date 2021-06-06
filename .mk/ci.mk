@@ -1,2 +1,2 @@
 ci:
-	act -P ubuntu-latest=nektos/act-environments-ubuntu:18.04 
+	act -P ubuntu-latest=nektos/act-environments-ubuntu:2:0.04 

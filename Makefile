@@ -1,5 +1,5 @@
 DOCKER_IMAGE := networkop/meshnet
-GOPATH ?= ${HOME}/bin
+GOPATH ?= ${HOME}/go
 ARCHS := "linux/amd64,linux/arm64"
 #ARCHS := "linux/amd64"
 

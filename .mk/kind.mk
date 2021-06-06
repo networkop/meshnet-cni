@@ -18,7 +18,7 @@ kind-ensure:
 .PHONY: kind-start
 kind-start: kind-ensure 
 	@$(GOPATH)/bin/kind get clusters | grep $(KIND_CLUSTER_NAME)  >/dev/null 2>&1 || \
-		$(GOPATH)/kind create cluster --name $(KIND_CLUSTER_NAME) --config ./kind.yaml 
+		$(GOPATH)/bin/kind create cluster --name $(KIND_CLUSTER_NAME) --config ./kind.yaml 
 
 .PHONY: kind-wait-for-cni
 kind-wait-for-cni:
