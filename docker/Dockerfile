@@ -33,11 +33,12 @@ ARG TARGETOS
 ARG TARGETARCH
 
 COPY daemon/ daemon/
+COPY api/ api/
 COPY plugin/ plugin/
 COPY --from=proto_base /src/ .
 
-RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags "${LDFLAGS}" -o meshnet plugin/meshnet.go
-RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags "${LDFLAGS}" -o meshnetd daemon/*.go
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags "${LDFLAGS}" -o meshnet plugin/meshnet.go 
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags "${LDFLAGS}" -o meshnetd daemon/main.go
 
 
 FROM alpine:latest
