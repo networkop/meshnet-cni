@@ -2,43 +2,42 @@ package main
 
 import (
 	"flag"
+	"os"
+	"strconv"
 
+	"github.com/networkop/meshnet-cni/daemon/meshnet"
 	log "github.com/sirupsen/logrus"
+)
+
+const (
+	defaultPort = 51111
 )
 
 func main() {
 
 	isDebug := flag.Bool("d", false, "enable degugging")
+	grpcPort, err := strconv.Atoi(os.Getenv("GRPC_PORT"))
+	if err != nil || grpcPort == 0 {
+		grpcPort = defaultPort
+	}
 	flag.Parse()
-
+	log.SetLevel(log.InfoLevel)
 	if *isDebug {
 		log.SetLevel(log.DebugLevel)
 		log.Debug("Verbose logging enabled")
-	} else {
-		log.SetLevel(log.InfoLevel)
 	}
 
-	kubeClient, err := newDynamicClient()
+	m, err := meshnet.New(meshnet.Config{
+		Port: grpcPort,
+	})
 	if err != nil {
-		log.Fatal("Failed to connect to K8s API")
+		log.Errorf("Failed to create meshnet: %v", err)
+		os.Exit(1)
 	}
+	log.Info("Starting meshnet daemon...")
 
-	config := loadConfigVars()
-
-	meshnetd := &meshnetd{
-		config: config,
-		kube:   kubeClient,
+	if err := m.Serve(); err != nil {
+		log.Errorf("Daemon exited badly: %v", err)
+		os.Exit(1)
 	}
-
-	go func() {
-		err := meshnetd.Start()
-		if err != nil {
-			log.Fatal("Failed to start meshnet daemon")
-		}
-	}()
-
-	log.Info("meshnet daemon has started...")
-	// Wait forever
-	ch := make(chan struct{})
-	<-ch
 }

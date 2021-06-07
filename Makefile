@@ -21,8 +21,8 @@ test:
 
 # Build local binaries
 local-build:
-	CGO_ENABLED=0 GOOS=linux go build -o meshnet plugin/meshnet.go 
-	CGO_ENABLED=0 GOOS=linux go build -o meshnetd daemon/*.go
+	CGO_ENABLED=0 GOOS=linux go build -o meshnet github.com/networkop/meshnet-cni/plugin 
+	CGO_ENABLED=0 GOOS=linux go build -o meshnetd github.com/networkop/meshnet-cni/daemon
 
 .PHONY: docker
 ## Build the docker image

@@ -1,38 +1,33 @@
-package main
+package meshnet
 
 import (
 	"context"
 
-	pb "github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
 	"github.com/networkop/meshnet-cni/daemon/vxlan"
+
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/util/retry"
+
+	mpb "github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
 )
 
-var gvr = schema.GroupVersionResource{
-	Group:    "networkop.co.uk",
-	Version:  "v1beta1",
-	Resource: "topologies",
-}
-
-func (s *meshnetd) getPod(ctx context.Context, name, ns string) (*unstructured.Unstructured, error) {
+func (m *Meshnet) getPod(ctx context.Context, name, ns string) (*unstructured.Unstructured, error) {
 	log.Infof("Reading pod %s from K8s", name)
-	return s.kube.Resource(gvr).Namespace(ns).Get(ctx, name, metav1.GetOptions{})
+	return m.tClient.Topology(ns).Unstructured(ctx, name, metav1.GetOptions{})
 }
 
-func (s *meshnetd) updateStatus(ctx context.Context, obj *unstructured.Unstructured, ns string) error {
+func (m *Meshnet) updateStatus(ctx context.Context, obj *unstructured.Unstructured, ns string) error {
 	log.Infof("Update pod status %s from K8s", obj.GetName())
-	_, err := s.kube.Resource(gvr).Namespace(ns).UpdateStatus(ctx, obj, metav1.UpdateOptions{})
+	_, err := m.tClient.Topology(ns).Update(ctx, obj, metav1.UpdateOptions{})
 	return err
 }
 
-func (s *meshnetd) Get(ctx context.Context, pod *pb.PodQuery) (*pb.Pod, error) {
+func (m *Meshnet) Get(ctx context.Context, pod *mpb.PodQuery) (*mpb.Pod, error) {
 	log.Infof("Retrieving %s's metadata from K8s...", pod.Name)
 
-	result, err := s.getPod(ctx, pod.Name, pod.KubeNs)
+	result, err := m.getPod(ctx, pod.Name, pod.KubeNs)
 	if err != nil {
 		log.Errorf("Failed to read pod %s from K8s", pod.Name)
 		return nil, err
@@ -44,14 +39,14 @@ func (s *meshnetd) Get(ctx context.Context, pod *pb.PodQuery) (*pb.Pod, error) {
 		return nil, err
 	}
 
-	links := make([]*pb.Link, len(remoteLinks))
+	links := make([]*mpb.Link, len(remoteLinks))
 	for i := range links {
 		remoteLink, ok := remoteLinks[i].(map[string]interface{})
 		if !ok {
 			log.Errorf("Unrecognised 'Link' structure")
 			return nil, err
 		}
-		newLink := &pb.Link{}
+		newLink := &mpb.Link{}
 		newLink.PeerPod, _, _ = unstructured.NestedString(remoteLink, "peer_pod")
 		newLink.PeerIntf, _, _ = unstructured.NestedString(remoteLink, "peer_intf")
 		newLink.LocalIntf, _, _ = unstructured.NestedString(remoteLink, "local_intf")
@@ -64,7 +59,7 @@ func (s *meshnetd) Get(ctx context.Context, pod *pb.PodQuery) (*pb.Pod, error) {
 	srcIP, _, _ := unstructured.NestedString(result.Object, "status", "src_ip")
 	netNs, _, _ := unstructured.NestedString(result.Object, "status", "net_ns")
 
-	return &pb.Pod{
+	return &mpb.Pod{
 		Name:   pod.Name,
 		SrcIp:  srcIP,
 		NetNs:  netNs,
@@ -73,11 +68,11 @@ func (s *meshnetd) Get(ctx context.Context, pod *pb.PodQuery) (*pb.Pod, error) {
 	}, nil
 }
 
-func (s *meshnetd) SetAlive(ctx context.Context, pod *pb.Pod) (*pb.BoolResponse, error) {
+func (m *Meshnet) SetAlive(ctx context.Context, pod *mpb.Pod) (*mpb.BoolResponse, error) {
 	log.Infof("Setting %s's SrcIp=%s and NetNs=%s", pod.Name, pod.SrcIp, pod.NetNs)
 
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		result, err := s.getPod(ctx, pod.Name, pod.KubeNs)
+		result, err := m.getPod(ctx, pod.Name, pod.KubeNs)
 		if err != nil {
 			log.Errorf("Failed to read pod %s from K8s", pod.Name)
 			return err
@@ -91,7 +86,7 @@ func (s *meshnetd) SetAlive(ctx context.Context, pod *pb.Pod) (*pb.BoolResponse,
 			log.Errorf("Failed to update pod's net_ns")
 		}
 
-		return s.updateStatus(ctx, result, pod.KubeNs)
+		return m.updateStatus(ctx, result, pod.KubeNs)
 	})
 
 	if retryErr != nil {
@@ -99,17 +94,17 @@ func (s *meshnetd) SetAlive(ctx context.Context, pod *pb.Pod) (*pb.BoolResponse,
 			"err":      retryErr,
 			"function": "SetAlive",
 		}).Errorf("Failed to update pod %s alive status", pod.Name)
-		return &pb.BoolResponse{Response: false}, retryErr
+		return &mpb.BoolResponse{Response: false}, retryErr
 	}
 
-	return &pb.BoolResponse{Response: true}, nil
+	return &mpb.BoolResponse{Response: true}, nil
 }
 
-func (s *meshnetd) Skip(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolResponse, error) {
+func (m *Meshnet) Skip(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolResponse, error) {
 	log.Infof("Skipping of pod %s by pod %s", skip.Peer, skip.Pod)
 
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		result, err := s.getPod(ctx, skip.Pod, skip.KubeNs)
+		result, err := m.getPod(ctx, skip.Pod, skip.KubeNs)
 		if err != nil {
 			log.Errorf("Failed to read pod %s from K8s", skip.Pod)
 			return err
@@ -124,26 +119,26 @@ func (s *meshnetd) Skip(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolRespon
 			return err
 		}
 
-		return s.updateStatus(ctx, result, skip.KubeNs)
+		return m.updateStatus(ctx, result, skip.KubeNs)
 	})
 	if retryErr != nil {
 		log.WithFields(log.Fields{
 			"err":      retryErr,
 			"function": "Skip",
 		}).Errorf("Failed to update skip pod %s status", skip.Pod)
-		return &pb.BoolResponse{Response: false}, retryErr
+		return &mpb.BoolResponse{Response: false}, retryErr
 	}
 
-	return &pb.BoolResponse{Response: true}, nil
+	return &mpb.BoolResponse{Response: true}, nil
 }
 
-func (s *meshnetd) SkipReverse(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolResponse, error) {
+func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolResponse, error) {
 	log.Infof("Reverse-skipping of pod %s by pod %s", skip.Peer, skip.Pod)
 
 	var podName string
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// setting the value for peer pod
-		peerPod, err := s.getPod(ctx, skip.Peer, skip.KubeNs)
+		peerPod, err := m.getPod(ctx, skip.Peer, skip.KubeNs)
 		if err != nil {
 			log.Errorf("Failed to read pod %s from K8s", skip.Pod)
 			return err
@@ -162,19 +157,19 @@ func (s *meshnetd) SkipReverse(ctx context.Context, skip *pb.SkipQuery) (*pb.Boo
 		}
 
 		// sending peer pod's updates to k8s
-		return s.updateStatus(ctx, peerPod, skip.KubeNs)
+		return m.updateStatus(ctx, peerPod, skip.KubeNs)
 	})
 	if retryErr != nil {
 		log.WithFields(log.Fields{
 			"err":      retryErr,
 			"function": "SkipReverse",
 		}).Errorf("Failed to update peer pod %s skipreverse status", podName)
-		return &pb.BoolResponse{Response: false}, retryErr
+		return &mpb.BoolResponse{Response: false}, retryErr
 	}
 
 	retryErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// setting the value for this pod
-		thisPod, err := s.getPod(ctx, skip.Pod, skip.KubeNs)
+		thisPod, err := m.getPod(ctx, skip.Pod, skip.KubeNs)
 		if err != nil {
 			log.Errorf("Failed to read pod %s from K8s", skip.Pod)
 			return err
@@ -210,7 +205,7 @@ func (s *meshnetd) SkipReverse(ctx context.Context, skip *pb.SkipQuery) (*pb.Boo
 			}
 
 			// sending this pod's updates to k8s
-			return s.updateStatus(ctx, thisPod, skip.KubeNs)
+			return m.updateStatus(ctx, thisPod, skip.KubeNs)
 		}
 		return nil
 	})
@@ -219,16 +214,16 @@ func (s *meshnetd) SkipReverse(ctx context.Context, skip *pb.SkipQuery) (*pb.Boo
 			"err":      retryErr,
 			"function": "SkipReverse",
 		}).Error("Failed to update this pod skipreverse status")
-		return &pb.BoolResponse{Response: false}, retryErr
+		return &mpb.BoolResponse{Response: false}, retryErr
 	}
 
-	return &pb.BoolResponse{Response: true}, nil
+	return &mpb.BoolResponse{Response: true}, nil
 }
 
-func (s *meshnetd) IsSkipped(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolResponse, error) {
+func (m *Meshnet) IsSkipped(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolResponse, error) {
 	log.Infof("Checking if %s is skipped by %s", skip.Peer, skip.Pod)
 
-	result, err := s.getPod(ctx, skip.Peer, skip.KubeNs)
+	result, err := m.getPod(ctx, skip.Peer, skip.KubeNs)
 	if err != nil {
 		log.Errorf("Failed to read pod %s from K8s", skip.Pod)
 		return nil, err
@@ -238,17 +233,17 @@ func (s *meshnetd) IsSkipped(ctx context.Context, skip *pb.SkipQuery) (*pb.BoolR
 
 	for _, peer := range skipped {
 		if skip.Pod == peer.(string) {
-			return &pb.BoolResponse{Response: true}, nil
+			return &mpb.BoolResponse{Response: true}, nil
 		}
 	}
 
-	return &pb.BoolResponse{Response: false}, nil
+	return &mpb.BoolResponse{Response: false}, nil
 }
 
-func (s *meshnetd) Update(ctx context.Context, pod *pb.RemotePod) (*pb.BoolResponse, error) {
+func (m *Meshnet) Update(ctx context.Context, pod *mpb.RemotePod) (*mpb.BoolResponse, error) {
 	if err := vxlan.CreateOrUpdate(pod); err != nil {
 		log.Errorf("Failed to Update Vxlan")
-		return &pb.BoolResponse{Response: false}, nil
+		return &mpb.BoolResponse{Response: false}, nil
 	}
-	return &pb.BoolResponse{Response: true}, nil
+	return &mpb.BoolResponse{Response: true}, nil
 }
