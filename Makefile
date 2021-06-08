@@ -1,4 +1,4 @@
-DOCKER_IMAGE := networkop/meshnet
+DOCKER_IMAGE := hfam/meshnet
 GOPATH ?= ${HOME}/go
 ARCHS := "linux/amd64,linux/arm64"
 #ARCHS := "linux/amd64"
