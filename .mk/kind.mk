@@ -3,22 +3,22 @@ KIND_CLUSTER_NAME := "meshnet"
 
 .PHONY: kind-install
 kind-install: 
-	go get sigs.k8s.io/kind@v0.7.0
+	go get sigs.k8s.io/kind@v0.11.1
 
 .PHONY: kind-stop
 kind-stop: 
-	@$(GOPATH)/kind delete cluster --name $(KIND_CLUSTER_NAME) || \
+	@$(GOPATH)/bin/kind delete cluster --name $(KIND_CLUSTER_NAME) || \
 		echo "kind cluster is not running"
 
 .PHONY: kind-ensure 
 kind-ensure: 
-	@which $(GOPATH)/kind >/dev/null 2>&1 || \
+	@which $(GOPATH)/bin/kind >/dev/null 2>&1 || \
 		make kind-install
 
 .PHONY: kind-start
 kind-start: kind-ensure 
-	@$(GOPATH)/kind get clusters | grep $(KIND_CLUSTER_NAME)  >/dev/null 2>&1 || \
-		$(GOPATH)/kind create cluster --name $(KIND_CLUSTER_NAME) --config ./kind.yaml 
+	@$(GOPATH)/bin/kind get clusters | grep $(KIND_CLUSTER_NAME)  >/dev/null 2>&1 || \
+		$(GOPATH)/bin/kind create cluster --name $(KIND_CLUSTER_NAME) --config ./kind.yaml 
 
 .PHONY: kind-wait-for-cni
 kind-wait-for-cni:
@@ -30,4 +30,4 @@ kind-connect:
 
 .PHONY: kind-load
 kind-load: 
-	$(GOPATH)/kind load docker-image --name $(KIND_CLUSTER_NAME) ${DOCKER_IMAGE}:${COMMIT}
+	$(GOPATH)/bin/kind load docker-image --name $(KIND_CLUSTER_NAME) ${DOCKER_IMAGE}:${COMMIT}

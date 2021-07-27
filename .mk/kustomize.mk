@@ -4,12 +4,12 @@ kust-install:
 
 .PHONY: kust-ensure 
 kust-ensure: 
-	@which $(GOPATH)/kustomize >/dev/null 2>&1 || \
+	@which $(GOPATH)/bin/kustomize >/dev/null 2>&1 || \
 		make kust-install
 
 .PHONY: kustomize
 kustomize: kust-ensure
-	cd manifests/overlays/e2e && $(GOPATH)/kustomize edit set image ${DOCKER_IMAGE}:${COMMIT}
+	cd manifests/overlays/e2e && $(GOPATH)/bin/kustomize edit set image ${DOCKER_IMAGE}:${COMMIT}
 
 .PHONY: kustomize-kops
 kustomize-kops: kust-ensure 
