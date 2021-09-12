@@ -153,23 +153,23 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	log.Info("Parsing CNI_ARGS environment variable")
 	cniArgs := k8sArgs{}
-	if err = types.LoadArgs(args.Args, &cniArgs); err != nil {
+	if err := types.LoadArgs(args.Args, &cniArgs); err != nil {
 		return err
 	}
 	log.Infof("Processing ADD POD in namespace %s", cniArgs.K8S_POD_NAMESPACE)
 
 	// Verifying and calling delegateAdd for the master plugin
-	if n.Delegate == nil {
-		log.Infof("'delegate' is a required field in config, it should be the config of the main plugin to use")
-	}
-	r, err := delegateAdd(ctx, n.Delegate, args.IfName)
-	if err != nil {
-		log.Infof("'delegate' plugin failed: %s", err)
-		return err
-	}
+	//if n.Delegate == nil {
+	//	log.Infof("'delegate' is a required field in config, it should be the config of the main plugin to use")
+	//}
+	//r, err := delegateAdd(ctx, n.Delegate, args.IfName)
+	//if err != nil {
+	//	log.Infof("'delegate' plugin failed: %s", err)
+	//	return err
+	//}
 
-	log.Info("Master plugin has finished")
-	log.Infof("Master plugin result is %+v", r)
+	//log.Info("Master plugin has finished")
+	//log.Infof("Master plugin result is %+v", r)
 
 	// Finding the source IP and interface for VXLAN VTEP
 	srcIP, srcIntf, err := getVxlanSource()
@@ -195,7 +195,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 	})
 	if err != nil {
 		log.Info("pod topology was not found, skipping")
-		return r.Print()
+		//return r.Print()
+		return nil
 	}
 
 	// Marking pod as "alive" by setting its srcIP and NetNS
@@ -376,8 +377,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 	}
-	log.Infof("Connected all links, exiting with result %+v", r)
-	return r.Print()
+	//log.Infof("Connected all links, exiting with result %+v", r)
+	//return r.Print()
+	return n.NetConf.PrevResult.Print()
 }
 
 // Deletes interfaces from a POD
@@ -385,14 +387,14 @@ func cmdDel(args *skel.CmdArgs) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Parsing cni .conf file
-	n, err := loadConf(args.StdinData)
-	if err != nil {
-		return err
-	}
+	//n, err := loadConf(args.StdinData)
+	//if err != nil {
+	//	return err
+	//}
 
 	// Parsing CNI_ARGS environment variable
 	cniArgs := k8sArgs{}
-	if err = types.LoadArgs(args.Args, &cniArgs); err != nil {
+	if err := types.LoadArgs(args.Args, &cniArgs); err != nil {
 		return err
 	}
 	log.Infof("Processing DEL request: %s", cniArgs.K8S_POD_NAME)
@@ -451,13 +453,13 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	// Verifying and calling DelegateDel for the master plugin
-	if n.Delegate == nil {
-		return fmt.Errorf(`"delegate" is a required field in config, it should be the config of the main plugin to use`)
-	}
-	if err = delegateDel(context.Background(), n.Delegate, args.IfName); err != nil {
-		log.Infof("Delegate plugin failed to remove the interface")
-		return err
-	}
+	//if n.Delegate == nil {
+	//	return fmt.Errorf(`"delegate" is a required field in config, it should be the config of the main plugin to use`)
+	//}
+	//if err = delegateDel(context.Background(), n.Delegate, args.IfName); err != nil {
+	//	log.Infof("Delegate plugin failed to remove the interface")
+	//	return err
+	//}
 
 	return nil
 }

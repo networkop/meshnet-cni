@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/networkop/meshnet-cni/daemon/cni"
 	"github.com/networkop/meshnet-cni/daemon/meshnet"
 	log "github.com/sirupsen/logrus"
 )
@@ -14,6 +15,12 @@ const (
 )
 
 func main() {
+
+	if err := cni.Init(); err != nil {
+		log.Errorf("Failed to initialise CNI plugin: %v", err)
+		os.Exit(1)
+	}
+	defer cni.Cleanup()
 
 	isDebug := flag.Bool("d", false, "enable degugging")
 	grpcPort, err := strconv.Atoi(os.Getenv("GRPC_PORT"))
