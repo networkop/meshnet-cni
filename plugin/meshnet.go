@@ -11,6 +11,7 @@ import (
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/davecgh/go-spew/spew"
 	koko "github.com/redhat-nfvpe/koko/api"
@@ -49,12 +50,30 @@ func init() {
 }
 
 // loadConf loads information from cni.conf
-func loadConf(bytes []byte) (*netConf, error) {
+func loadConf(bytes []byte) (*netConf, *current.Result, error) {
 	n := &netConf{}
 	if err := json.Unmarshal(bytes, n); err != nil {
-		return nil, fmt.Errorf("failed to load netconf: %v", err)
+		return nil, nil, fmt.Errorf("failed to load netconf: %v", err)
 	}
-	return n, nil
+
+	// Parse previous result.
+	if n.RawPrevResult == nil {
+		// return early if there was no previous result, which is allowed for DEL calls
+		return n, &current.Result{}, nil
+	}
+
+	// Parse previous result.
+	var result *current.Result
+	var err error
+	if err = version.ParsePrevResult(&n.NetConf); err != nil {
+		return nil, nil, fmt.Errorf("could not parse prevResult: %v", err)
+	}
+
+	result, err = current.NewResultFromResult(n.PrevResult)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not convert result to current version: %v", err)
+	}
+	return n, result, nil
 }
 
 // getVxlanSource uses netlink to query the IP and LinkName of the interface with default route.
@@ -146,7 +165,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	defer cancel()
 
 	log.Info("Parsing cni .conf file")
-	n, err := loadConf(args.StdinData)
+	n, result, err := loadConf(args.StdinData)
 	if err != nil {
 		return err
 	}
@@ -379,7 +398,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	//log.Infof("Connected all links, exiting with result %+v", r)
 	//return r.Print()
-	return n.NetConf.PrevResult.Print()
+	return types.PrintResult(result, n.CNIVersion)
 }
 
 // Deletes interfaces from a POD

@@ -2,6 +2,7 @@ package cni
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ const (
 var meshnetCNIPath = filepath.Join(defaultNetDir, defaultCNIFile)
 
 // This is borrowed from https://tinyurl.com/khjhf9xd
-func loadConfList() (*types.NetConfList, error) {
+func loadConfList() (map[string]interface{}, error) {
 	files, err := libcni.ConfFiles(defaultNetDir, []string{".conflist"})
 	switch {
 	case err != nil:
@@ -40,16 +41,20 @@ func loadConfList() (*types.NetConfList, error) {
 
 	sort.Strings(files)
 
+	// only pre-parse the top of the CNI file without using the types.NetConfList
+	// this is because some generic types do not define the complete config struct
+	// e.g. IPAM config will not be parsed at all beyong the `type`
+	var conf map[string]interface{}
+
 	// we only care about the first file
 	bytes, _ := ioutil.ReadFile(files[0])
-	configParsed := types.NetConfList{}
-	err = json.Unmarshal(bytes, &configParsed)
+	err = json.Unmarshal(bytes, &conf)
 
-	return &configParsed, err
+	return conf, err
 }
 
-func saveConfList(c *types.NetConfList) error {
-	bytes, err := json.MarshalIndent(c, "", "\t")
+func saveConfList(m map[string]interface{}) error {
+	bytes, err := json.MarshalIndent(m, "", "\t")
 	if err != nil {
 		return err
 	}
@@ -64,10 +69,25 @@ func Init() error {
 		return err
 	}
 
-	conf.Plugins = append(conf.Plugins, &types.NetConf{
+	var plugins []interface{}
+	plug, ok := conf["plugins"]
+	if !ok {
+		return fmt.Errorf("error parsing configuration list: no 'plugins' key")
+	}
+	plugins, ok = plug.([]interface{})
+	if !ok {
+		return fmt.Errorf("error parsing configuration list: invalid 'plugins' type %T", plug)
+	}
+	if len(plugins) == 0 {
+		return fmt.Errorf("error parsing configuration list: no plugins in list")
+	}
+
+	plugins = append(plugins, &types.NetConf{
 		Type: defaultPluginName,
 		Name: defaultPluginName,
 	})
+
+	conf["plugins"] = plugins
 
 	return saveConfList(conf)
 }
