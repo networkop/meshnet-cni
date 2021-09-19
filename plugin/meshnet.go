@@ -342,8 +342,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 	}
-	//log.Infof("Connected all links, exiting with result %+v", r)
-	//return r.Print()
+
 	return types.PrintResult(result, n.CNIVersion)
 }
 

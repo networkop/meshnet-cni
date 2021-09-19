@@ -40,25 +40,47 @@ spec:
     peer_ip: 12.12.12.2/24
 ```
 
-The plugin configuration file specifies the `delegate` plugin configuration, which will setup the first (`eth0`) interface of the pod.
+The plugin configuration file contains a "chained" `meshnet` in the list of plugins:
 
 ```yaml
 {
-  "cniVersion": "0.1.0",
-  "name": "my_network",       <--- Arbitrary name
-  "type": "meshnet",          <--- The name of CNI plugin binary
-  "delegate": {               <--- Plugin responsible for the first interface (eth0)
-    "name": "dind0",
-    "bridge": "dind0",
-    "type": "bridge",
-    "isDefaultGateway": true,
-    "ipMasq": true,
-    "ipam": {
-      "type": "host-local",
-      "subnet": "10.244.1.0/24",
-      "gateway": "10.244.1.1"
+  "cniVersion": "0.3.1",
+  "name": "kindnet",
+  "plugins": [
+    {
+      "ipMasq": false,
+      "ipam": {
+        "dataDir": "/run/cni-ipam-state",
+        "ranges": [
+          [
+            {
+              "subnet": "10.244.0.0/24"
+            }
+          ]
+        ],
+        "routes": [
+          {
+            "dst": "0.0.0.0/0"
+          }
+        ],
+        "type": "host-local"
+      },
+      "mtu": 1500,
+      "type": "ptp"
+    },
+    {
+      "capabilities": {
+        "portMappings": true
+      },
+      "type": "portmap"
+    },
+    {
+      "name": "meshnet",
+      "type": "meshnet",
+      "ipam": {},
+      "dns": {}
     }
-  }
+  ]
 }
 ```
 
@@ -74,7 +96,7 @@ Below is the order of operation of the plugin from the perspective of kube-node-
 
 1. Kubernetes cluster gets populated with the topology information via custom resources
 2. pod-1/pod-2 come up, local kubelet calls the `meshnet` binary for each pod to setup their networking.
-3. meshnet binary `delegates` the ADD command to the "master" plugin specified in the CNI configuration file, which connectes interface `eth0`.
+3. Based on the CNI configuration file, Kubelet calls meshnet to set up additional interfaces.
   > Note that `eth0` is **always** setup by one of the existing CNI plugins. It is used to provide external connectivity to and from the pod
 4. meshnet binary updates the topology data with pod's runtime metadata (namespace filepath and primary IP address).
 5. meshnet binary (via a local meshnet daemon) retrieves the list of `links` and looks up peer pod's metadata to identify what kind of link to setup - veth, vxlan or macvlan.
@@ -164,20 +186,36 @@ kubectl apply -k manifests/base
 
 Meshnet plugin was designed to work alongside any other existing or future Kubernetes resources that may not require any special topology to be set up for them. Every pod coming up will have its first interface setup by an existing CNI plugin (e.g. flannel, weave, calico) and will only have additional interfaces connected if there's a matching custom `Topology` resource.
 
-During the initial installation process, meshnet will try to merge the existing CNI plugin configuration with meshnet CNI configuration. Below is the final example of meshnet+weave plugin configuration file:
+During the initial installation process, meshnet will try to insert itself into the list of CNI plugins. For example, assuming the following configuration is present in `/etc/cni/net.d/weave.conf`:
 
 ```
 {
   "cniVersion": "0.2.0",
-  "name": "meshnet_network",
-  "type": "meshnet",
-  "delegate": {
-    "name": "weave",
-    "type": "weave-net",
-    "hairpinMode": true
-  }
+  "name": "weave",
+  "type": "weave-net",
 }
 ```
+Meshnet will convert the above to conflist and produce the file `/etc/cni/net.d/00-meshnet.conflist` with the following content:
+
+```
+{
+  "cniVersion": "0.2.0",
+  "name": "weave",
+  "plugins": [
+    {
+      "cniVersion": "0.2.0",
+      "name": "weave",
+      "type": "weave-net"
+    },
+    {
+      "name": "meshnet",
+      "type": "meshnet",
+      "ipam": {},
+      "dns": {}
+    }
+  ]
+}
+``
 
 ### Cusomising installation paths
 

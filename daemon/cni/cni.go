@@ -24,7 +24,7 @@ var meshnetCNIPath = filepath.Join(defaultNetDir, defaultCNIFile)
 
 // This is borrowed from https://tinyurl.com/khjhf9xd
 func loadConfList() (map[string]interface{}, error) {
-	files, err := libcni.ConfFiles(defaultNetDir, []string{".conflist"})
+	files, err := libcni.ConfFiles(defaultNetDir, []string{".conf", ".conflist", ".json"})
 	switch {
 	case err != nil:
 		return nil, err
@@ -32,25 +32,59 @@ func loadConfList() (map[string]interface{}, error) {
 		return nil, libcni.NoConfigsFoundError{Dir: defaultNetDir}
 	}
 
-	for i, f := range files {
+	// Ignore any existing meshnet config files
+	var confFiles []string
+	for _, f := range files {
 		if strings.Contains(f, "meshnet") {
-			files = append(files[:i], files[i+1:]...)
-			break
+			continue
 		}
+		confFiles = append(confFiles, f)
 	}
 
-	sort.Strings(files)
+	sort.Strings(confFiles)
+	// Iterate over existing confFiles and pick the first one that's valid, borrowed from https://tinyurl.com/977uyx5m
+	for _, confFile := range confFiles {
+		var confList *libcni.NetworkConfigList
+		if strings.HasSuffix(confFile, ".conflist") {
+			confList, err = libcni.ConfListFromFile(confFile)
+			if err != nil {
+				log.Info("Error loading %q CNI config list file: %s", confFile, err)
+				continue
+			}
+		} else {
+			conf, err := libcni.ConfFromFile(confFile)
+			if err != nil {
+				log.Info("Error loading %q CNI config file: %s", confFile, err)
+				continue
+			}
+			// Ensure the config has a "type" so we know what plugin to run.
+			// Also catches the case where somebody put a conflist into a conf file.
+			if conf.Network.Type == "" {
+				log.Info("Error loading %q CNI config file: no 'type'; perhaps this is a .conflist?", confFile)
+				continue
+			}
 
-	// only pre-parse the top of the CNI file without using the types.NetConfList
-	// this is because some generic types do not define the complete config struct
-	// e.g. IPAM config will not be parsed at all beyong the `type`
-	var conf map[string]interface{}
+			confList, err = libcni.ConfListFromConf(conf)
+			if err != nil {
+				log.Info("Error converting CNI config file %q to list: %s", confFile, err)
+				continue
+			}
+		}
+		if len(confList.Plugins) == 0 {
+			log.Info("%q CNI config list has no plugins, skipping", confFile)
+			continue
+		}
 
-	// we only care about the first file
-	bytes, _ := ioutil.ReadFile(files[0])
-	err = json.Unmarshal(bytes, &conf)
+		// only pre-parse the top of the CNI file without using the types.NetConfList
+		// this is because some generic types do not define the complete config struct
+		// e.g. IPAM config will not be parsed at all beyong the `type`
+		var conf map[string]interface{}
+		err = json.Unmarshal(confList.Bytes, &conf)
 
-	return conf, err
+		return conf, err
+	}
+
+	return nil, fmt.Errorf("no valid network configurations found in %q", defaultNetDir)
 }
 
 func saveConfList(m map[string]interface{}) error {
@@ -69,18 +103,8 @@ func Init() error {
 		return err
 	}
 
-	var plugins []interface{}
-	plug, ok := conf["plugins"]
-	if !ok {
-		return fmt.Errorf("error parsing configuration list: no 'plugins' key")
-	}
-	plugins, ok = plug.([]interface{})
-	if !ok {
-		return fmt.Errorf("error parsing configuration list: invalid 'plugins' type %T", plug)
-	}
-	if len(plugins) == 0 {
-		return fmt.Errorf("error parsing configuration list: no plugins in list")
-	}
+	// We can safely access and type-cast since all of the checks have already been done in the `loadConfList()`
+	plugins := conf["plugins"].([]interface{})
 
 	plugins = append(plugins, &types.NetConf{
 		Type: defaultPluginName,

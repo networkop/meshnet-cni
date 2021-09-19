@@ -45,7 +45,7 @@ FROM alpine:latest
 RUN apk add --no-cache jq
 COPY --from=build /go/src/github.com/networkop/meshnet-cni/meshnet /
 COPY --from=build /go/src/github.com/networkop/meshnet-cni/meshnetd /
-COPY etc/cni/net.d/meshnet.conf /
+#COPY etc/cni/net.d/meshnet.conf /
 COPY docker/new-entrypoint.sh /entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 RUN chmod +x /meshnetd
