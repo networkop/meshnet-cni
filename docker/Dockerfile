@@ -45,8 +45,8 @@ FROM alpine:latest
 RUN apk add --no-cache jq
 COPY --from=build /go/src/github.com/networkop/meshnet-cni/meshnet /
 COPY --from=build /go/src/github.com/networkop/meshnet-cni/meshnetd /
-COPY etc/cni/net.d/meshnet.conf /
-COPY docker/entrypoint.sh /
+#COPY etc/cni/net.d/meshnet.conf /
+COPY docker/new-entrypoint.sh /entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 RUN chmod +x /meshnetd
 #RUN mkdir /lib64 && ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2
