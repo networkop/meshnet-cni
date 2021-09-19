@@ -48,30 +48,30 @@ func loadConfList() (map[string]interface{}, error) {
 		if strings.HasSuffix(confFile, ".conflist") {
 			confList, err = libcni.ConfListFromFile(confFile)
 			if err != nil {
-				log.Info("Error loading %q CNI config list file: %s", confFile, err)
+				log.Infof("Error loading %q CNI config list file: %s", confFile, err)
 				continue
 			}
 		} else {
 			conf, err := libcni.ConfFromFile(confFile)
 			if err != nil {
-				log.Info("Error loading %q CNI config file: %s", confFile, err)
+				log.Infof("Error loading %q CNI config file: %s", confFile, err)
 				continue
 			}
 			// Ensure the config has a "type" so we know what plugin to run.
 			// Also catches the case where somebody put a conflist into a conf file.
 			if conf.Network.Type == "" {
-				log.Info("Error loading %q CNI config file: no 'type'; perhaps this is a .conflist?", confFile)
+				log.Infof("Error loading %q CNI config file: no 'type'; perhaps this is a .conflist?", confFile)
 				continue
 			}
 
 			confList, err = libcni.ConfListFromConf(conf)
 			if err != nil {
-				log.Info("Error converting CNI config file %q to list: %s", confFile, err)
+				log.Infof("Error converting CNI config file %q to list: %s", confFile, err)
 				continue
 			}
 		}
 		if len(confList.Plugins) == 0 {
-			log.Info("%q CNI config list has no plugins, skipping", confFile)
+			log.Infof("%q CNI config list has no plugins, skipping", confFile)
 			continue
 		}
 
