@@ -204,7 +204,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
 		})
 		if err != nil {
-			log.Infof("Failed to retrieve peer pod's topology")
+			log.Infof("Failed to retrieve peer pod %s:%s topology", string(cniArgs.K8S_POD_NAMESPACE), link.PeerPod)
 			return err
 		}
 

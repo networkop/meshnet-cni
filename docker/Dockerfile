@@ -1,5 +1,5 @@
 # GRPC generation
-FROM golang:1.16.3 AS proto_base
+FROM golang:1.17.2 AS proto_base
 
 WORKDIR /src
 
@@ -15,7 +15,7 @@ RUN buf lint && buf generate -v
 
 # go mod download
 
-FROM golang:1.16.3 AS build_base
+FROM golang:1.17.2 AS build_base
 
 WORKDIR /go/src/github.com/networkop/meshnet-cni
 
