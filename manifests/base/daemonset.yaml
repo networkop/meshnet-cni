@@ -20,36 +20,41 @@ spec:
       nodeSelector:
         beta.kubernetes.io/arch: amd64
       tolerations:
-      - operator: Exists
-        effect: NoSchedule
+        - operator: Exists
+          effect: NoSchedule
       containers:
-      - name: meshnet
-        securityContext:
-          privileged: true
-        image: networkop/meshnet:latest
-        imagePullPolicy: IfNotPresent
-        resources:
-          limits:
-            memory: 200Mi
-          requests:
-            cpu: 100m
-            memory: 200Mi
-        volumeMounts:
-        - name: cni-cfg
-          mountPath: /etc/cni/net.d
-        - name: cni-bin
-          mountPath: /opt/cni/bin
-        - name: var-run-netns
-          mountPath: /var/run/netns
-          mountPropagation: Bidirectional
+        - name: meshnet
+          securityContext:
+            privileged: true
+          image: networkop/meshnet:latest
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              memory: 200Mi
+            requests:
+              cpu: 100m
+              memory: 200Mi
+          env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+          volumeMounts:
+            - name: cni-cfg
+              mountPath: /etc/cni/net.d
+            - name: cni-bin
+              mountPath: /opt/cni/bin
+            - name: var-run-netns
+              mountPath: /var/run/netns
+              mountPropagation: Bidirectional
       terminationGracePeriodSeconds: 30
       volumes:
-      - name: cni-bin
-        hostPath:
-          path: /opt/cni/bin
-      - name: cni-cfg
-        hostPath:
-          path: /etc/cni/net.d
-      - name: var-run-netns
-        hostPath:
-          path: /var/run/netns
+        - name: cni-bin
+          hostPath:
+            path: /opt/cni/bin
+        - name: cni-cfg
+          hostPath:
+            path: /etc/cni/net.d
+        - name: var-run-netns
+          hostPath:
+            path: /var/run/netns
