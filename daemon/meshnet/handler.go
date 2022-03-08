@@ -2,6 +2,7 @@ package meshnet
 
 import (
 	"context"
+	"os"
 
 	"github.com/networkop/meshnet-cni/daemon/vxlan"
 
@@ -58,6 +59,7 @@ func (m *Meshnet) Get(ctx context.Context, pod *mpb.PodQuery) (*mpb.Pod, error) 
 
 	srcIP, _, _ := unstructured.NestedString(result.Object, "status", "src_ip")
 	netNs, _, _ := unstructured.NestedString(result.Object, "status", "net_ns")
+	nodeIP := os.Getenv("HOST_IP")
 
 	return &mpb.Pod{
 		Name:   pod.Name,
@@ -65,6 +67,7 @@ func (m *Meshnet) Get(ctx context.Context, pod *mpb.PodQuery) (*mpb.Pod, error) 
 		NetNs:  netNs,
 		KubeNs: pod.KubeNs,
 		Links:  links,
+		NodeIp: nodeIP,
 	}, nil
 }
 
