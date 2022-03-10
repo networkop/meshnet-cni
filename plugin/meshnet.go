@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -75,20 +76,22 @@ func loadConf(bytes []byte) (*netConf, *current.Result, error) {
 	return n, result, nil
 }
 
-// getVxlanSource uses netlink to query the IP and LinkName of the interface with default route.
-func getVxlanSource() (string, string, error) {
-	log.Infof("Looking up a default route to get the intf and IP for vxlan")
-	r, err := netlink.RouteGet(net.IPv4(1, 1, 1, 1))
-	if (err != nil) && len(r) < 1 {
-		return "", "", fmt.Errorf("failed to get default route: %s\n%+v", err, r)
+// getVxlanSource uses netlink to get the iface reliably given an IP address.
+func getVxlanSource(nodeIP string) (string, string, error) {
+	if nodeIP == "" {
+		return "", "", fmt.Errorf("meshnetd provided no HOST_IP address: %s", nodeIP)
 	}
-	srcIP := r[0].Src.String()
-	link, err := netlink.LinkByIndex(r[0].LinkIndex)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to get link by its index: %s", err)
+	ifaces, _ := net.Interfaces()
+	for _, i := range ifaces {
+		addrs, _ := i.Addrs()
+		for _, a := range addrs {
+			if strings.Contains(a.String(), nodeIP) {
+				log.Infof("Found iface %s for address %s", i.Name, nodeIP)
+				return nodeIP, i.Name, nil
+			}
+		}
 	}
-	srcIntf := link.Attrs().Name
-	return srcIP, srcIntf, nil
+	return "", "", fmt.Errorf("No iface found for address %s", nodeIP)
 }
 
 // makeVeth creates koko.Veth from NetNS and LinkName
@@ -158,11 +161,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	// Finding the source IP and interface for VXLAN VTEP
-	srcIP, srcIntf, err := getVxlanSource()
+	srcIP, srcIntf, err := getVxlanSource(localPod.NodeIp)
 	if err != nil {
 		return err
 	}
-	log.Infof("Default route is via %s@%s", srcIP, srcIntf)
+	log.Infof("VxLan route is via %s@%s", srcIP, srcIntf)
 
 	// Marking pod as "alive" by setting its srcIP and NetNS
 	localPod.NetNs = args.Netns
