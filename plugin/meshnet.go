@@ -78,7 +78,9 @@ func loadConf(bytes []byte) (*netConf, *current.Result, error) {
 
 // getVxlanSource uses netlink to get the iface reliably given an IP address.
 func getVxlanSource(nodeIP string) (string, string, error) {
-
+	if nodeIP == "" {
+		return "", "", fmt.Errorf("meshnetd provided no HOST_IP address: %s", nodeIP)
+	}
 	ifaces, _ := net.Interfaces()
 	for _, i := range ifaces {
 		addrs, _ := i.Addrs()
