@@ -30,6 +30,8 @@ const (
 	macvlanMode = netlink.MACVLAN_MODE_BRIDGE
 )
 
+var interNodeLinkType = "VXLAN"
+
 type netConf struct {
 	types.NetConf
 	Delegate map[string]interface{} `json:"delegate"`
@@ -423,11 +425,24 @@ func cmdDel(args *skel.CmdArgs) error {
 	return nil
 }
 
+func SetInterNodeLinkType() {
+	b, err := os.ReadFile("/etc/cni/net.d/meshnet-inter-node-link-type")
+	if err != nil {
+		log.Warningf("Could not read iner node link type: %v", err)
+	}
+
+	interNodeLinkType = string(b)
+}
+
 func main() {
 	fp, err := os.OpenFile("/var/log/meshnet-cni.log", os.O_APPEND|os.O_CREATE|os.O_RDWR, 0666)
 	if err == nil {
 		log.SetOutput(fp)
 	}
+
+	SetInterNodeLinkType()
+	log.Infof("INTER_NODE_LINK_TYPE: %v", interNodeLinkType)
+
 	retCode := 0
 	e := skel.PluginMainWithError(cmdAdd, cmdGet, cmdDel, version.All, "CNI plugin meshnet v0.3.0")
 	if e != nil {

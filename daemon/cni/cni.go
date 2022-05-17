@@ -17,6 +17,7 @@ import (
 const (
 	defaultNetDir     = "/etc/cni/net.d"
 	defaultCNIFile    = "00-meshnet.conflist"
+	interNodeLinkConf = "/etc/cni/net.d/meshnet-inter-node-link-type"
 	defaultPluginName = "meshnet"
 )
 
@@ -95,6 +96,10 @@ func saveConfList(m map[string]interface{}) error {
 	return ioutil.WriteFile(meshnetCNIPath, bytes, os.FileMode(06444))
 }
 
+func saveInterNodeLinkConf() error {
+	return ioutil.WriteFile(interNodeLinkConf, []byte(os.Getenv("INTER_NODE_LINK_TYPE")), os.FileMode(06444))
+}
+
 // Init installs meshnet CNI configuration
 func Init() error {
 
@@ -112,6 +117,10 @@ func Init() error {
 	})
 
 	conf["plugins"] = plugins
+
+	if err := saveInterNodeLinkConf(); err != nil {
+		return err
+	}
 
 	return saveConfList(conf)
 }
