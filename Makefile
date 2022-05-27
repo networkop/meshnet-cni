@@ -28,13 +28,16 @@ local-build:
 ## Build the docker image
 docker:
 	@echo 'Creating docker image ${DOCKER_IMAGE}:${COMMIT}'
-	@docker buildx create --use --name=multiarch --node multiarch && \
+#   +++todo : improve it to resue already created builder	
+#	docker buildx rm multiarch
+	docker buildx create --use --name=multiarch --driver-opt network=host --buildkitd-flags '--allow-insecure-entitlement network.host' --node multiarch && \
 	docker buildx build --load \
-	  --build-arg LDFLAGS=${LDFLAGS} \
-	  --platform "linux/amd64" \
-	  --tag ${DOCKER_IMAGE}:${COMMIT} \
-	  -f docker/Dockerfile \
-	  .
+	--build-arg LDFLAGS=${LDFLAGS} \
+	--platform "linux/amd64" \
+	--tag ${DOCKER_IMAGE}:${COMMIT} \
+	-f docker/Dockerfile \
+	.
+
 
 .PHONY: release
 ## Release the current code with git tag and `latest`
@@ -76,12 +79,12 @@ wait-for-meshnet:
 .PHONY: install
 ## Install meshnet into a test cluster
 install: kind-load kind-wait-for-cni kustomize kind-connect
-	kustomize build manifests/overlays/e2e  | kubectl apply -f -
+	kustomize build manifests/overlays/grpc-link  | kubectl apply -f -
 
 .PHONY: uninstall
 ## Uninstall meshnet from a test cluster
 uninstall: kind-connect
-	-kustomize build manifests/overlays/e2e  | kubectl delete -f -
+	-kustomize build manifests/overlays/grpc-link  | kubectl delete -f -
 
 github-ci: kust-ensure build clean local upload install e2e
 

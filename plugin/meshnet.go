@@ -23,14 +23,16 @@ import (
 )
 
 const (
-	vxlanBase   = 5000
-	defaultPort = "51111"
-	localhost   = "localhost"
-	localDaemon = localhost + ":" + defaultPort
-	macvlanMode = netlink.MACVLAN_MODE_BRIDGE
+	vxlanBase             = 5000
+	defaultPort           = "51111"
+	localhost             = "localhost"
+	localDaemon           = localhost + ":" + defaultPort
+	macvlanMode           = netlink.MACVLAN_MODE_BRIDGE
+	INTER_NODE_LINK_VXLAN = "VXLAN"
+	INTER_NODE_LINK_GRPC  = "GRPC"
 )
 
-var interNodeLinkType = "VXLAN"
+var interNodeLinkType = INTER_NODE_LINK_VXLAN
 
 type netConf struct {
 	types.NetConf
@@ -44,6 +46,7 @@ type k8sArgs struct {
 	K8S_POD_INFRA_CONTAINER_ID types.UnmarshallableString
 }
 
+//-------------------------------------------------------------------------------------------------
 func init() {
 	// this ensures that main runs only on main thread (thread group leader).
 	// since namespace ops (unshare, setns) are done for a single thread, we
@@ -51,6 +54,7 @@ func init() {
 	runtime.LockOSThread()
 }
 
+//-------------------------------------------------------------------------------------------------
 // loadConf loads information from cni.conf
 func loadConf(bytes []byte) (*netConf, *current.Result, error) {
 	n := &netConf{}
@@ -96,6 +100,7 @@ func getVxlanSource(nodeIP string) (string, string, error) {
 	return "", "", fmt.Errorf("No iface found for address %s", nodeIP)
 }
 
+//-------------------------------------------------------------------------------------------------
 // makeVeth creates koko.Veth from NetNS and LinkName
 func makeVeth(netNS, linkName string, ip string) (*koko.VEth, error) {
 	log.Infof("Creating Veth struct with NetNS:%s and intfName: %s, IP:%s", netNS, linkName, ip)
@@ -115,6 +120,7 @@ func makeVeth(netNS, linkName string, ip string) (*koko.VEth, error) {
 	return &veth, nil
 }
 
+//-------------------------------------------------------------------------------------------------
 // Creates koko.Vxlan from ParentIF, destination IP and VNI
 func makeVxlan(srcIntf string, peerIP string, idx int64) *koko.VxLan {
 	return &koko.VxLan{
@@ -124,6 +130,7 @@ func makeVxlan(srcIntf string, peerIP string, idx int64) *koko.VxLan {
 	}
 }
 
+//-------------------------------------------------------------------------------------------------
 // Adds interfaces to a POD
 func cmdAdd(args *skel.CmdArgs) error {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -140,7 +147,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err := types.LoadArgs(args.Args, &cniArgs); err != nil {
 		return err
 	}
-	log.Infof("Processing ADD POD in namespace %s", cniArgs.K8S_POD_NAMESPACE)
+	log.Infof("Processing ADD POD %s in namespace %s", cniArgs.K8S_POD_NAME, cniArgs.K8S_POD_NAMESPACE)
 
 	log.Infof("Attempting to connect to local meshnet daemon")
 	conn, err := grpc.Dial(localDaemon, grpc.WithInsecure())
@@ -288,7 +295,16 @@ func cmdAdd(args *skel.CmdArgs) error {
 					}
 				}
 			} else { // This means we're on different hosts
+				/*+++king:(todo) this tunnell mode must come form CNI config. */
 				log.Infof("%s@%s and %s@%s are on different hosts", localPod.Name, localPod.SrcIp, peerPod.Name, peerPod.SrcIp)
+				if interNodeLinkType == INTER_NODE_LINK_GRPC {
+					err = CreatGRPCChan(link, localPod, peerPod, &meshnetClient, &cniArgs, &ctx)
+					if err != nil {
+						log.Infof("!! Failed to create grpc wire. err: %v", err)
+						return err
+					}
+					continue
+				}
 				// Creating koko's Vxlan struct
 				vxlan := makeVxlan(srcIntf, peerPod.SrcIp, link.Uid)
 				// Checking if interface already exists
@@ -377,13 +393,22 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	meshnetClient := mpb.NewLocalClient(conn)
 
+	/*+++king : Tell daemon to close the grpc tunnel for this pod netns (if any) */
 	log.Infof("Retrieving pod's metadata from meshnet daemon")
+	wireDef := mpb.WireDef{
+		KubeNs:     string(cniArgs.K8S_POD_NAMESPACE),
+		LocalPodNm: string(cniArgs.K8S_POD_NAME),
+	}
+	/*+++king(todo): Handle response handling */
+	meshnetClient.RemGRPCWire(ctx, &wireDef)
+
+	log.Infof("Retrieving pod's (%s@%s) metadata from meshnet daemon", string(cniArgs.K8S_POD_NAME), string(cniArgs.K8S_POD_NAMESPACE))
 	localPod, err := meshnetClient.Get(ctx, &mpb.PodQuery{
 		Name:   string(cniArgs.K8S_POD_NAME),
 		KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
 	})
 	if err != nil {
-		log.Infof("Pod %s:%s is not topology returning", string(cniArgs.K8S_POD_NAMESPACE), string(cniArgs.K8S_POD_NAME))
+		log.Infof("Pod %s:%s is not in topology returning. err:%v", string(cniArgs.K8S_POD_NAMESPACE), string(cniArgs.K8S_POD_NAME), err)
 		return types.PrintResult(result, n.CNIVersion)
 	}
 
@@ -434,6 +459,7 @@ func SetInterNodeLinkType() {
 	interNodeLinkType = string(b)
 }
 
+//-------------------------------------------------------------------------------------------------
 func main() {
 	fp, err := os.OpenFile("/var/log/meshnet-cni.log", os.O_APPEND|os.O_CREATE|os.O_RDWR, 0666)
 	if err == nil {
@@ -458,3 +484,5 @@ func cmdGet(args *skel.CmdArgs) error {
 	log.Infof("cmdGet called: %+v", args)
 	return fmt.Errorf("not implemented")
 }
+
+//-------------------------------------------------------------------------------------------------

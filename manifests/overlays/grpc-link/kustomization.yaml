@@ -6,10 +6,13 @@ patches:
       path: /spec/template/spec/containers/0/env/1
       value:
         name: INTER_NODE_LINK_TYPE
-        value: GRPC
+        value: VXLAN
   target:
     kind: DaemonSet
     name: meshnet
     namespace: meshnet
 resources:
 - ../../base/
+images:
+- name: networkop/meshnet
+  newTag: 9c7d704-dirty

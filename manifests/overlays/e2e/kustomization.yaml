@@ -2,6 +2,6 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 images:
 - name: networkop/meshnet
-  newTag: 0acd38e-dirty
+  newTag: 9c7d704-dirty
 resources:
 - ../../base/

@@ -47,14 +47,83 @@ message RemotePod {
     int64 vni = 6;
 }
 
+/* The proto describes both end of a grpc-wire, the local end and the remote end. */
+message WireDef {
+    /* The remote machine interface id, to which this wire is connected to.*/
+    int64 peer_intf_id = 1;
+
+    /* The remote machine interface IP, to which this grpc wire is connected to. */
+    string peer_ip = 2;
+
+    /* Interface name, which comes from topology definition and to be put inside container.
+     * This filed is used when grpc-wire to be created.  
+     */
+    string intf_name_in_pod = 3;    
+
+    /* Network name space of the pod which is connected to this grpc-wire" */
+    string local_pod_net_ns = 4;  
+    
+    /* Each meshnet link has a uid.  */
+    int64 link_uid = 5;
+
+    /* Name of the local pod where this wire is getting added. */
+    string local_pod_nm = 6;
+
+    /* The local node interface name, from where packet needs to be picked up for 
+       transporting to remote machine.  */
+    string veth_name_local_host = 7;
+
+    string kube_ns = 8;
+  
+}
+
+message WireCreateResponse {
+    bool response = 1;
+    /* the interface id, which was created.*/
+    int64 peer_intf_id = 2;
+}
+
+message Packet {
+    int64 remot_intf_id = 1;   // the remote machine interface id, to which this packet should be delivered. 
+    bytes frame = 2;
+    int64 frame_len = 3;
+}
+
+message ReqIntfID {
+    string in_cont_intf_nm = 1;
+}
+
+
+message RespIntfID {
+    bool ok = 1;
+    int64 local_intf_id = 2;   
+}
+
+
 service Local {
     rpc Get (PodQuery) returns (Pod);
     rpc SetAlive (Pod) returns (BoolResponse);
     rpc SkipReverse (SkipQuery) returns (BoolResponse);
     rpc Skip (SkipQuery) returns (BoolResponse);
     rpc IsSkipped (SkipQuery) returns (BoolResponse);
+
+    rpc GRPCWireExists(WireDef) returns (WireCreateResponse); 
+    rpc AddGRPCWireLocal(WireDef) returns (BoolResponse);
+    rpc RemGRPCWire(WireDef) returns (BoolResponse);
+
+    /* The node is going to hold multiple veth to connect to multiple containers. 
+    * Each veth name must be different. Daemon generates an ID which is unique in 
+    * this node.
+    */
+    rpc GenLocVEthID(ReqIntfID) returns (RespIntfID);
 }
 
 service Remote {
     rpc Update (RemotePod) returns (BoolResponse);
+    rpc AddGRPCWireRemote(WireDef) returns (WireCreateResponse);
+}
+
+service WireProtocol {
+    rpc SendToOnce (Packet) returns (BoolResponse);
+    rpc SendToStream (stream Packet) returns (BoolResponse);
 }

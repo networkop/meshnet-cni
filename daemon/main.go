@@ -41,7 +41,7 @@ func main() {
 		log.Errorf("Failed to create meshnet: %v", err)
 		os.Exit(1)
 	}
-	log.Info("Starting meshnet daemon...")
+	log.Info("Starting meshnet daemon...with grpc support")
 
 	if err := m.Serve(); err != nil {
 		log.Errorf("Daemon exited badly: %v", err)
