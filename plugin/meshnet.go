@@ -295,7 +295,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 					}
 				}
 			} else { // This means we're on different hosts
-				/*+++king:(todo) this tunnell mode must come form CNI config. */
 				log.Infof("%s@%s and %s@%s are on different hosts", localPod.Name, localPod.SrcIp, peerPod.Name, peerPod.SrcIp)
 				if interNodeLinkType == INTER_NODE_LINK_GRPC {
 					err = CreatGRPCChan(link, localPod, peerPod, &meshnetClient, &cniArgs, &ctx)
@@ -367,6 +366,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	return types.PrintResult(result, n.CNIVersion)
 }
 
+//-------------------------------------------------------------------------------------------------
 // Deletes interfaces from a POD
 func cmdDel(args *skel.CmdArgs) error {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -393,13 +393,13 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	meshnetClient := mpb.NewLocalClient(conn)
 
-	/*+++king : Tell daemon to close the grpc tunnel for this pod netns (if any) */
+	/* Tell daemon to close the grpc tunnel for this pod netns (if any) */
 	log.Infof("Retrieving pod's metadata from meshnet daemon")
 	wireDef := mpb.WireDef{
 		KubeNs:     string(cniArgs.K8S_POD_NAMESPACE),
 		LocalPodNm: string(cniArgs.K8S_POD_NAME),
 	}
-	/*+++king(todo): Handle response handling */
+	/*+++todo: Add response handling */
 	meshnetClient.RemGRPCWire(ctx, &wireDef)
 
 	log.Infof("Retrieving pod's (%s@%s) metadata from meshnet daemon", string(cniArgs.K8S_POD_NAME), string(cniArgs.K8S_POD_NAMESPACE))

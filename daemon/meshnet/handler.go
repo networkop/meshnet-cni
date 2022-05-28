@@ -300,7 +300,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 
 		IsReady:       true,
 		HowCreated:    grpcwire.HOST_CREATED_WIRE,
-		CreaterHostIP: "unknown", /*+++king(todo) retrive host ip and set it here vxlan.HOST_CREATED_WIRE*/
+		CreaterHostIP: "unknown", /*+++todo retrieve host ip and set it here. Needed only for debugging */
 
 		StopC:     make(chan bool),
 		Namespace: wireDef.KubeNs,
@@ -349,7 +349,7 @@ func (m *Meshnet) SendToOnce(ctx context.Context, pkt *mpb.Packet) (*mpb.BoolRes
 
 	}
 
-	/* +++king(Input)
+	/* +++(Input)
 	InterfaceByIndex(index int) (*Interface, error)
 
 	looks like pcap handle and pcap write packet data is one way to do.
@@ -381,10 +381,8 @@ func (m *Meshnet) AddGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (
 	wire, err := grpcwire.CreateGRPCWireRemoteTriggered(wireDef, &stopC)
 
 	if err == nil {
-		//go grpcwire.RecvFrmLocalPodThread(wireDef.PeerIp, wireDef.PeerIntfId, localHostVethName, &stopC)
 		go grpcwire.RecvFrmLocalPodThread(wire)
 
-		//return &mpb.WireCreateResponse{Response: true, PeerIntfId:  localHostVethIndex}, nil
 		return &mpb.WireCreateResponse{Response: true, PeerIntfId: wire.LocalNodeIntfID}, nil
 	}
 	log.Errorf("AddWireRemote err : %v", err)
@@ -394,7 +392,6 @@ func (m *Meshnet) AddGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (
 //---------------------------------------------------------------------------------------------------------------
 func (m *Meshnet) GenLocVEthID(ctx context.Context, in *mpb.ReqIntfID) (*mpb.RespIntfID, error) {
 	id := grpcwire.GetNextIndex()
-	//log.Infof("+++Daemon:(GenLocVEthID RPC) : called ot get external vthe pair creation corespoding to %s, returning id %d", in.InContIntfNm, id)
 	return &mpb.RespIntfID{Ok: true, LocalIntfId: id}, nil
 }
 

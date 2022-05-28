@@ -74,6 +74,8 @@ message WireDef {
     string veth_name_local_host = 7;
 
     string kube_ns = 8;
+
+    string local_pod_ip = 9;
   
 }
 

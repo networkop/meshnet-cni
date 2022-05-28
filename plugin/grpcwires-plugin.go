@@ -39,7 +39,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 	})
 
 	if err != nil {
-		log.Infof("Failed to read skipped status from our peer")
+		log.Infof("Failed to read skipped status for pd %s", localPod.Name)
 		return err
 	}
 
@@ -80,10 +80,16 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 
 	// Build koko's veth struct for the intf to be placed inside the pod
 	inConIntfNm := link.LocalIntf
-	inContainerVeth := &koko.VEth{
-		LinkName: inConIntfNm,
-		NsName:   localPod.NetNs,
+	inContainerVeth, err := makeVeth(localPod.NetNs, inConIntfNm, link.LocalIp)
+	if err != nil {
+		log.Infof("Could not create vEth for pod %s:%s. err%v", localPod.Name, inConIntfNm, err)
+		return err
 	}
+
+	// inContainerVeth := &koko.VEth{
+	// 	LinkName: inConIntfNm,
+	// 	NsName:   localPod.NetNs,
+	// }
 
 	/* We need to make the node end of the v-eth pair name unique for this node. So get an unique id from daemon */
 	localIntfDI, err := (*localClient).GenLocVEthID(*ctx, &mpb.ReqIntfID{InContIntfNm: inConIntfNm})
@@ -107,7 +113,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		LinkName: locIfNm,
 		NsName:   currNs.Path()}
 
-	if err = koko.MakeVeth(*inContainerVeth, *hostEndVeth); err != nil { //+++king order in which the argument are passed - does it matter ?
+	if err = koko.MakeVeth(*inContainerVeth, *hostEndVeth); err != nil { //+++think: order in which the argument are passed - does it matter ?
 		return fmt.Errorf("Creating GRPC wire: failed to create vEth-pair inside pod (%s:%s) and on host (%s). err:%s",
 			localPod.Name, inContainerVeth.LinkName, hostEndVeth.LinkName, err)
 	}
@@ -146,8 +152,9 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		LocalPodNm:    peerPod.Name, // name of the remote pod
 
 		/*meshnet assigned unique identifier for this link */
-		LinkUid: link.Uid,
-		KubeNs:  peerPod.KubeNs,
+		LinkUid:    link.Uid,
+		KubeNs:     peerPod.KubeNs,
+		LocalPodIp: link.PeerIp,
 	}
 
 	log.Infof("Create GRPC wire: dialing remote node-->%s@%s", peerPod.Name, url)
