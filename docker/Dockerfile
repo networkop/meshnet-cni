@@ -1,11 +1,11 @@
 # GRPC generation
-FROM golang:1.17.2 AS proto_base
+FROM golang:1.18.2 AS proto_base
 
 WORKDIR /src
 
-RUN go get -u google.golang.org/protobuf/cmd/protoc-gen-go
-RUN go get -u google.golang.org/grpc/cmd/protoc-gen-go-grpc
-RUN go get github.com/bufbuild/buf/cmd/buf@latest
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+RUN go install github.com/bufbuild/buf/cmd/buf@latest
 
 COPY daemon/proto .
 COPY buf.gen.yaml .
@@ -15,7 +15,7 @@ RUN buf lint && buf generate -v
 
 # go mod download
 
-FROM golang:1.17.2 AS build_base
+FROM golang:1.18.2 AS build_base
 
 WORKDIR /go/src/github.com/networkop/meshnet-cni
 
