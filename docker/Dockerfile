@@ -42,6 +42,7 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags "${LDFLAGS}" -o mesh
 
 FROM alpine:latest
 RUN apk add --no-cache jq
+ADD https://raw.githubusercontent.com/stedolan/jq/master/COPYING /third_party/licenses/jq/
 COPY --from=build /go/src/github.com/networkop/meshnet-cni/meshnet /
 COPY --from=build /go/src/github.com/networkop/meshnet-cni/meshnetd /
 #COPY etc/cni/net.d/meshnet.conf /
