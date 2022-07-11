@@ -60,8 +60,8 @@ type GRPCWire struct {
 	LocalNodeIntfID int64  // OS assigned interface ID of local node interface for this wire
 	LocalNodeIntfNm string // name of local node interface for this wire
 
-	/* Pod information : where this wire is terminatin in this node */
-	LocalPodIP     string // IP address of the local container who will consume packets over this wire. This is for debugging. This is genrally not available when links are getting created and is not necessary also.
+	/* Pod information : where this wire is terminating in this node */
+	LocalPodIP     string // IP address of the local container who will consume packets over this wire. This is for debugging. This is generally not available when links are getting created and is not necessary also.
 	LocalPodNm     string // Name the local pod who will consume packets over this wire.
 	LocalPodIntfNm string // Name the interface which is inside the local container who will consume packets over this wire. This is for debugging
 	LocalPodNetNS  string
@@ -98,7 +98,7 @@ var wiresByUID = IdToWireMap{
 
 type GRPCWireHandleMap struct {
 	/* Used when a packet is received, then we know the id of the interface to which the packet to be delivered.
-	   This map take interface-id as key adn returns the correspodign pcap-handle for deliverign the packet.
+	   This map take interface-id as key adn returns the corresponding pcap-handle for delivering the packet.
 	   map[interface-id]->pcap-handle */
 	allHandles map[int64]*pcap.Handle
 	mu         sync.Mutex
@@ -158,8 +158,8 @@ func AddActiveWire(wire *GRPCWire, handle *pcap.Handle) int {
 	}
 
 	/*+++think: if this ware is already present in the map then it will be overwritten.
-	            It seems to obe ok to overwrite. Think more in what situation this may
-				not be the desired behavior adn we need to throw an error. */
+	            It seems to be ok to overwrite. Think more in what situation this may
+				not be the desired behavior and we need to throw an error. */
 	wire.IsReady = true
 
 	wiresByUID.allWires[PodLink{
@@ -220,18 +220,6 @@ func RemWireFrmPod(kubeNs string, podNm string) error {
 		if resp {
 			log.Infof("Removed all grpc-wire for pod: %s@%s", w.LocalPodIntfNm, w.LocalPodNm)
 		}
-
-		// Setting reversed skipped flag so that this pod will try to connect veth pair on restart
-		// log.Infof("Setting skip-reverse flag on peer %s", link.PeerPod)
-		// ok, err := meshnetClient.SkipReverse(ctx, &mpb.SkipQuery{
-		// 	Pod:    localPod.Name,
-		// 	Peer:   link.PeerPod,
-		// 	KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
-		// })
-		// if err != nil || !ok.Response {
-		// 	log.Infof("Failed to set skip reversed flag on our peer %s", link.PeerPod)
-		// 	return err
-		// }
 	}
 
 	return fmt.Errorf("Error while removing GRPC wire for pod %s. err:%v", podNm, fstErr)
@@ -276,10 +264,6 @@ func CreateGRPCWireRemoteTriggered(wireDefRemot *mpb.WireDef, stopC *chan bool) 
 
 	var err error
 
-	//_, filename, line, _ := runtime.Caller(0)
-	log.Info("============CreateGRPCWireRemoteTriggered(Start)=============")
-	defer log.Info("=x=x=x=x=x=x=x===CreateGRPCWireRemoteTriggered(End)===x=x=x=x=x=x=x=")
-
 	/* If this link already created then do nothing. This can happen due to a race between the local and remote peer.
 	   We will allow only one to complete the creation. */
 	grpcwire, ok := GetActiveWire(int(wireDefRemot.LinkUid), wireDefRemot.LocalPodNetNs)
@@ -297,8 +281,7 @@ func CreateGRPCWireRemoteTriggered(wireDefRemot *mpb.WireDef, stopC *chan bool) 
 	}
 
 	idVeth := GetNextIndex()
-	//outIfNm := wireDefRemot.IntfNameInPod + "-grpc" + strconv.FormatInt(idVeth, 10)
-	//outIfNm := wireDefRemot.IntfNameInPod + locPdIntfNmPrefix + strconv.FormatInt(idVeth, 10)
+	/*Linux has problem if the interface name is big. (+++todo: add the documentation here) */
 	nmLen1 := len(wireDefRemot.IntfNameInPod)
 	nmLen2 := len(wireDefRemot.LocalPodNm)
 	if nmLen1 > 5 {
@@ -383,7 +366,6 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 	defaultPort := "51111" //+++todo: use proper constant as defined in some other file
 	pktBuffSz := int32(1024 * 64)
 
-	//url := fmt.Sprintf("%s:%s", peerIp, defaultPort)
 	url := strings.TrimSpace(fmt.Sprintf("%s:%s", wire.PeerPodIP, defaultPort))
 	handler, err := pcap.OpenLive(wire.LocalNodeIntfNm, pktBuffSz, true, pcap.BlockForever)
 	if err != nil {
@@ -447,8 +429,9 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 				FrameLen:    int64(len(data)),
 			}
 
-			/* Ethernet has a minimum frame size of 64 bytes, comprising an 18-byte header and a payload of 46 bytes.
-			It also has a maximum frame size of 1518 bytes, in which case the payload is 1500 bytes.*/
+			/*+++TODO: Ethernet has a minimum frame size of 64 bytes, comprising an 18-byte header and a payload of 46 bytes.
+			It also has a maximum frame size of 1518 bytes, in which case the payload is 1500 bytes.
+			This logic needs to be better, take the interface MTU not hardeoded value of 1518 */
 			if payload.FrameLen > 1518 {
 				pktType := DecodePkt(payload.Frame)
 				log.Infof("+++Daemon(RecvFrmLocalPodThread): Dropping:unusually large packet received from local pod. size: %d, pkt:%s", payload.FrameLen, pktType)
@@ -471,7 +454,6 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 //------------------------------------------------------------------------------------------------------
 func DecodePkt(frame []byte) string {
 	pktType := "Unknown"
-	//ok, debugInfo := grpcwire.DebugInfo(pkt.RemotIntfId)
 
 	packet := gopacket.NewPacket(frame, layers.LayerTypeEthernet, gopacket.Default)
 	ethernetLayer := packet.Layer(layers.LayerTypeEthernet)
@@ -528,116 +510,3 @@ func DecodePkt(frame []byte) string {
 
 	return pktType
 }
-
-//-----------------------------------------------------------------------------------------------------------------------
-// func Htons(i uint16) uint16 {
-// 	b := make([]byte, 2)
-// 	binary.BigEndian.PutUint16(b, i)
-// 	return *(*uint16)(unsafe.Pointer(&b[0]))
-/// }
-
-//-----------------------------------------------------------------------------------------------------------------------
-// func RecvFrmLocalPodThread_raw_socket_not_tested(peerIp string, peerIntfId int64, vethNameLocalHost string) error {
-
-// 	defaultPort := "51111" //+++king: use proper constant as defined in some other file
-
-// 	url := fmt.Sprintf("%s:%s", peerIp, defaultPort)
-// 	url = strings.TrimSpace(url)
-
-// 	//locInf, err := net.InterfaceByName(vethNameLocalHost)
-// 	//_, debugInfo := DebugInfo(int64(locInf.Index))
-// 	//log.Infof("+++Daemon(RecvFrmLocalPodThread): Listening on local interface - %s to transport packet to remote Node: %s@%d", vethNameLocalHost, peerIp, peerIntfId)
-
-// 	//fd, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, int(htons(syscall.ETH_P_ALL)))
-// 	fd, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, int(Htons(syscall.ETH_P_ALL)))
-// 	if err != nil {
-// 		log.Infof("RecvFrmLocalPodThread:Failed to open socket")
-// 		return err
-// 	}
-// 	defer syscall.Close(fd)
-
-// 	err = syscall.BindToDevice(fd, vethNameLocalHost)
-// 	//err = gopacket.BindToDevice(fd, vethNameLocalHost)
-// 	if err != nil {
-// 		log.Infof("RecvFrmLocalPodThread:Failed to bind to interfcae %s. error:%v", vethNameLocalHost, err)
-// 		return err
-// 	}
-
-// 	if err = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_RCVBUF, 0); err != nil {
-// 		log.Infof("Could not set recv buf size to zero")
-// 		return err
-// 	}
-
-// 	val, err := unix.GetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_RCVBUF)
-// 	log.Infof("RECV buffer size %d", val)
-
-// 	remote, err := grpc.Dial(url, grpc.WithInsecure())
-// 	if err != nil {
-// 		log.Infof("RecvFrmLocalPodThread:Failed to connect to remote %s", url)
-// 		return err
-// 	}
-// 	defer remote.Close()
-
-// 	ctx, cancel := context.WithCancel(context.Background())
-// 	defer cancel()
-
-// 	wireClient := mpb.NewWireProtocolClient(remote)
-
-// 	data := make([]byte, 2096)
-// 	for {
-
-// 		n, _, err := syscall.Recvfrom(fd, data, 0)
-
-// 		if err != nil {
-// 			log.Infof("RecvFrmLocalPodThread:Failed to red packet from %s", vethNameLocalHost)
-// 			return err
-// 		}
-
-// 		if n < 0 {
-// 			continue
-// 		}
-
-// 		packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.Default)
-// 		pktType := "Unknown"
-// 		ethernetLayer := packet.Layer(layers.LayerTypeEthernet)
-// 		if ethernetLayer != nil {
-// 			ethernetPacket, _ := ethernetLayer.(*layers.Ethernet)
-// 			if ethernetPacket.EthernetType == 0x86DD {
-// 				pktType = "IPv6"
-// 			} else if ethernetPacket.EthernetType == 0x0806 {
-// 				pktType = "ARP"
-// 			} else if ethernetPacket.EthernetType == 0x0800 {
-// 				pktType = "IPv4"
-// 			}
-// 			data := packet.Data()
-// 			payload := &mpb.Packet{
-// 				RemotIntfId: peerIntfId,
-// 				Frame:       data,
-// 				FrameLen:    int64(len(data)),
-// 			}
-
-// 			ipLayer := packet.Layer(layers.LayerTypeIPv4)
-// 			if ipLayer != nil {
-// 				ipPacket, _ := ipLayer.(*layers.IPv4)
-// 				if ipPacket.Protocol == 0x1 {
-// 					pktType = "IPv4:ICMP"
-// 				}
-// 			}
-// 			log.Printf("+++Daemon(RecvFrmLocalPodThread): Sent pkt to remote[pkt_type:%s, bytes: %d, Dest intf: %s@%d]", pktType, len(data), peerIp, peerIntfId)
-
-// 			ok, err := (wireClient).SendToOnce(ctx, payload)
-// 			if err != nil || !ok.Response {
-// 				log.Info("+++Daemon(RecvFrmLocalPodThread): Failed to send packet to remote")
-// 				return err
-// 			}
-// 		} else {
-// 			log.Printf("+++Daemon(RecvFrmLocalPodThread): Discarding non Ethernet packet")
-// 		}
-// 		//time.Sleep(5 * time.Second)
-
-// 	}
-
-// 	/*+++king: TODO handle stop signal for this thread */
-
-// 	return nil
-// }

@@ -28,8 +28,6 @@ local-build:
 ## Build the docker image
 docker:
 	@echo 'Creating docker image ${DOCKER_IMAGE}:${COMMIT}'
-#   +++todo : improve it to resue already created builder	
-#	docker buildx rm multiarch
 	docker buildx create --use --name=multiarch --driver-opt network=host --buildkitd-flags '--allow-insecure-entitlement network.host' --node multiarch && \
 	docker buildx build --load \
 	--build-arg LDFLAGS=${LDFLAGS} \
@@ -92,3 +90,29 @@ github-ci: kust-ensure build clean local upload install e2e
 # From: https://gist.github.com/klmr/575726c7e05d8780505a
 help:
 	@echo "$$(tput sgr0)";sed -ne"/^## /{h;s/.*//;:d" -e"H;n;s/^## //;td" -e"s/:.*//;G;s/\\n## /---/;s/\\n/ /g;p;}" ${MAKEFILE_LIST}|awk -F --- -v n=$$(tput cols) -v i=15 -v a="$$(tput setaf 6)" -v z="$$(tput sgr0)" '{printf"%s%*s%s ",a,-i,$$1,z;m=split($$2,w," ");l=n-i;for(j=1;j<=m;j++){l-=length(w[j])+1;if(l<= 0){l=n-i-length(w[j])-1;printf"\n%*s ",-i," ";}printf"%s ",w[j];}printf"\n";}'
+
+
+
+
+#----- the code below must not be upstreamed. This is for local testing only------------------------------
+
+GCP_TAG := gcr.io/kt-nts-athena-dev/${DOCKER_IMAGE}:${COMMIT}
+
+.PHONY: reset-kind
+reset-kind: down up install
+
+.PHONY: install-gcp
+## Install meshnet into a test cluster
+install-gcp: uninstall-gcp kustomize-gcp
+	# - docker tag ${DOCKER_IMAGE}:${COMMIT} gcr.io/kt-nts-athena-dev/${DOCKER_IMAGE}:${COMMIT}
+	- docker tag ${DOCKER_IMAGE}:${COMMIT} ${GCP_TAG}
+	#- docker push gcr.io/kt-nts-athena-dev/${DOCKER_IMAGE}:${COMMIT}
+	- echo ${GCP_TAG}
+	- docker push ${GCP_TAG}
+	- kustomize build manifests/overlays/grpc-link-gcp  | kubectl apply -f -
+
+.PHONY: uninstall-gcp
+uninstall-gcp: 
+	- ../my-tools/remove-meshnet-gcp.zsh ${GCP_TAG}
+	- kustomize build manifests/overlays/grpc-link-gcp  | kubectl delete -f -
+

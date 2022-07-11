@@ -60,7 +60,7 @@ message WireDef {
      */
     string intf_name_in_pod = 3;    
 
-    /* Network name space of the pod which is connected to this grpc-wire" */
+    /* Network name space of the local pod which is connected to this grpc-wire" */
     string local_pod_net_ns = 4;  
     
     /* Each meshnet link has a uid.  */

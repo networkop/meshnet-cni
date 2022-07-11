@@ -20,9 +20,6 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 	   are both up. They have got the management IP already.
 	*/
 
-	log.Infof("==========Start - Plugin CreatGRPCChan ===============")
-
-	defer log.Infof("-x-x-x-x-x-x-x---End - Plugin CreatGRPCChan ---x-x-x-x-x-x-x")
 	log.Infof("Setting up grpc-wire:(local-pod:%s:%s@node:%s <----link uid: %d----> remote-pod:%s:%s@node:%s)",
 		localPod.Name, link.LocalIntf, localPod.SrcIp,
 		link.Uid, peerPod.Name, link.PeerIntf, peerPod.SrcIp)
@@ -85,11 +82,6 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		log.Infof("Could not create vEth for pod %s:%s. err%v", localPod.Name, inConIntfNm, err)
 		return err
 	}
-
-	// inContainerVeth := &koko.VEth{
-	// 	LinkName: inConIntfNm,
-	// 	NsName:   localPod.NetNs,
-	// }
 
 	/* We need to make the node end of the v-eth pair name unique for this node. So get an unique id from daemon */
 	localIntfDI, err := (*localClient).GenLocVEthID(*ctx, &mpb.ReqIntfID{InContIntfNm: inConIntfNm})

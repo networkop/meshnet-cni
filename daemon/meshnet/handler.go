@@ -256,9 +256,6 @@ func (m *Meshnet) Update(ctx context.Context, pod *mpb.RemotePod) (*mpb.BoolResp
 
 //------------------------------------------------------------------------------------------------------
 func (m *Meshnet) RemGRPCWire(ctx context.Context, wireDef *mpb.WireDef) (*mpb.BoolResponse, error) {
-	log.Info("============RemGRPCWire==start==================")
-	defer log.Info("++++++++++++RemGRPCWire++end++++++++++++++++++++")
-
 	resp := true
 	err := grpcwire.RemWireFrmPod(wireDef.KubeNs, wireDef.LocalPodNm)
 	if err != nil {
@@ -269,9 +266,6 @@ func (m *Meshnet) RemGRPCWire(ctx context.Context, wireDef *mpb.WireDef) (*mpb.B
 
 //------------------------------------------------------------------------------------------------------
 func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*mpb.BoolResponse, error) {
-
-	log.Infof("============Daemon-Service-AddWireLocal(Start), wire ID - %v, Peer Machine IP - %v =============", wireDef.PeerIntfId, wireDef.PeerIp)
-	defer log.Infof("=x=x=x=x=x=x=x===Daemon-Service-AddWireLocal(End, wire ID - %v===x=x=x=x=x=x=x=", wireDef.PeerIntfId)
 
 	locInf, err := net.InterfaceByName(wireDef.VethNameLocalHost)
 	if err != nil {
@@ -309,7 +303,6 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 	grpcwire.AddActiveWire(&aWire, handle)
 
 	log.Infof("Starting the local packet receive thread for pod interface %s", wireDef.IntfNameInPod)
-	//go grpcwire.RecvFrmLocalPodThread(wireDef.PeerIp, wireDef.PeerIntfId, wireDef.VethNameLocalHost, &aWire.StopC)
 	go grpcwire.RecvFrmLocalPodThread(&aWire)
 
 	return &mpb.BoolResponse{Response: true}, nil
@@ -317,17 +310,6 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 
 //------------------------------------------------------------------------------------------------------
 func (m *Meshnet) SendToOnce(ctx context.Context, pkt *mpb.Packet) (*mpb.BoolResponse, error) {
-	//log.Infof("============Daemon-Service-SendToOnce(Start), wire ID - %v Pkt Length- %v =============", pkt.RemotIntfId, pkt.FrameLen)
-
-	//defer log.Infof("=x=x=x=x=x=x=x===Daemon-Service-SendToOnce(End, wire ID - %v===x=x=x=x=x=x=x=", pkt.RemotIntfId)
-
-	// Unpack Ethernet frame into Go representation.
-	// var eFrame ethernet.Frame
-	// if err := (&eFrame).UnmarshalBinary(pkt.Frame[:pkt.FrameLen]); err != nil {
-	// 	log.Fatalf("+++Daemon: failed to unmarshal ethernet frame: %v", err)
-	// }
-
-	//return &mpb.BoolResponse{Response: true}, nil
 
 	handle, err := grpcwire.GetHostIntfHndl(pkt.RemotIntfId)
 	if err != nil {
@@ -348,27 +330,6 @@ func (m *Meshnet) SendToOnce(ctx context.Context, pkt *mpb.Packet) (*mpb.BoolRes
 		log.Printf("+++Daemon-Service-SendToOnce (wire id - %v): Received unusually large size packet(%d bytes) from peer. Not delivering it to local pod")
 
 	}
-
-	/* +++(Input)
-	InterfaceByIndex(index int) (*Interface, error)
-
-	looks like pcap handle and pcap write packet data is one way to do.
-	PCAP REf:-
-	https://austinmarton.wordpress.com/2011/09/14/sending-raw-ethernet-packets-from-a-specific-interface-in-c-on-linux/
-	https://www.devdungeon.com/content/packet-capture-injection-and-analysis-gopacket#creating-sending-packets
-	https://github.com/jesseward/gopacket/blob/master/examples/pcaplay/main.go
-	https://golang.hotexamples.com/examples/github.com.google.gopacket.pcap/Handle/WritePacketData/golang-handle-writepacketdata-method-examples.html
-
-	GOPACKET Ref :-
-	https://github.com/google/gopacket/blob/master/afpacket/afpacket.go
-	https://stackoverflow.com/questions/61090243/read-from-a-raw-socket-connected-to-a-network-interface-using-golang
-	https://css.bz/2016/12/08/go-raw-sockets.html
-	https://golang.hotexamples.com/examples/syscall/-/BindToDevice/golang-bindtodevice-function-examples.html
-
-	Use capture --> https://github.com/ghedo/go.pkt
-	Use Channel --> https://stackoverflow.com/questions/62534827/no-blocking-eternet-capture
-
-	*/
 
 	return &mpb.BoolResponse{Response: true}, nil
 }
