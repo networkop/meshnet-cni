@@ -269,7 +269,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 
 	locInf, err := net.InterfaceByName(wireDef.VethNameLocalHost)
 	if err != nil {
-		log.Errorf("Failed to retrive interface ID for interface %v. error:%v", wireDef.VethNameLocalHost, err)
+		log.Errorf("Failed to retrieve interface ID for interface %v. error:%v", wireDef.VethNameLocalHost, err)
 		return &mpb.BoolResponse{Response: false}, err
 	}
 
@@ -284,7 +284,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 
 		LocalNodeIntfID: int64(locInf.Index),
 		LocalNodeIntfNm: wireDef.VethNameLocalHost,
-		LocalPodIP:      "Not Available",
+		LocalPodIP:      wireDef.LocalPodIp,
 		LocalPodIntfNm:  wireDef.IntfNameInPod,
 		LocalPodNm:      wireDef.LocalPodNm,
 		LocalPodNetNS:   wireDef.LocalPodNetNs,
@@ -313,12 +313,14 @@ func (m *Meshnet) SendToOnce(ctx context.Context, pkt *mpb.Packet) (*mpb.BoolRes
 
 	handle, err := grpcwire.GetHostIntfHndl(pkt.RemotIntfId)
 	if err != nil {
-		log.Printf("+++Daemon-Service-SendToOnce (wire id - %v): Could not find local handle. err:%v", pkt.RemotIntfId, err)
+		log.Printf("Daemon-Service-SendToOnce (wire id - %v): Could not find local handle. err:%v", pkt.RemotIntfId, err)
 		return &mpb.BoolResponse{Response: false}, err
 	}
-	pktType := grpcwire.DecodePkt(pkt.Frame)
 
-	log.Printf("+++Daemon(SendToOnce): Received [pkt: %s, bytes: %d, for local interface id: %d]. Sending it to local container", pktType, pkt.FrameLen, pkt.RemotIntfId)
+	// In case any per packet log need to be generated.
+	//pktType := grpcwire.DecodePkt(pkt.Frame)
+	//log.Printf("Daemon(SendToOnce): Received [pkt: %s, bytes: %d, for local interface id: %d]. Sending it to local container", pktType, pkt.FrameLen, pkt.RemotIntfId)
+	log.Printf("Daemon(SendToOnce): Received [bytes: %d, for local interface id: %d]. Sending it to local container", pkt.FrameLen, pkt.RemotIntfId)
 
 	if pkt.FrameLen <= 1518 {
 		err = handle.WritePacketData(pkt.Frame)
@@ -327,7 +329,8 @@ func (m *Meshnet) SendToOnce(ctx context.Context, pkt *mpb.Packet) (*mpb.BoolRes
 			return &mpb.BoolResponse{Response: false}, err
 		}
 	} else {
-		log.Printf("+++Daemon-Service-SendToOnce (wire id - %v): Received unusually large size packet(%d bytes) from peer. Not delivering it to local pod")
+		// WE should never reach here
+		log.Printf("Daemon-Service-SendToOnce (wire id - %v): Received unusually large size packet(%d bytes) from peer. Not delivering it to local pod")
 
 	}
 

@@ -16,7 +16,7 @@ import (
 
 //-----------------------------------------------------------------------------------------------------------
 func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localClient *mpb.LocalClient, cniArgs *k8sArgs, ctx *context.Context) error {
-	/* When this function is call it means that the two pods which are attached to this link
+	/* When this function is called it means that the two pods which are attached to this link
 	   are both up. They have got the management IP already.
 	*/
 
@@ -25,7 +25,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		link.Uid, peerPod.Name, link.PeerIntf, peerPod.SrcIp)
 
 	if ctx == nil || link == nil {
-		return fmt.Errorf("Can't establish grpc channel. Wither link or context not provided. ctx:%p, link:%p", ctx, link)
+		return fmt.Errorf("Can't establish grpc channel. Either link or context not provided. ctx:%p, link:%p", ctx, link)
 	}
 
 	log.Infof("Checking if we've been skipped")
@@ -49,7 +49,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		the we do not initiate the grpc tunnel. When the high priority peer pod boots up (or get ready) then
 		it will take care of grpc tunnel creation. This is needed to avoid the race condition when both
 		the pods are alive, no one has skipped each other and both of them tries to create the tunnel. In
-		this situation only high priority pod must creat the tunnel and not the low priority one. This will
+		this situation only high priority pod must create the tunnel and not the low priority one. This will
 		avoid conflict. */
 		log.Infof("Pod %s with link uid %d is not skipped. This pod has low priority. Peer pod %s will create this grpc-wire", localPod.Name, link.Uid, peerPod.Name)
 		return nil
@@ -62,7 +62,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 	}
 	resp, err := (*localClient).GRPCWireExists(*ctx, &wireDef)
 	if resp.Response == true {
-		/* While this pod was busy creating other link or was busy with some other task, the remote
+		/* While this pod was busy creating other links or was busy with some other task, the remote
 		   pod had finished creating this grpc-link.  */
 		log.Infof("This grpc wire is already set by the remote peer. Local interface id:%d", resp.PeerIntfId)
 		return nil
@@ -90,7 +90,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 	}
 
 	// Build koko's veth struct for the intf to be placed in the local node
-	//locIfNm := inConIntfNm + "-grpc" + strconv.FormatInt(localIntfDI.LocalIntfId, 10)
+	// Linux has issue if interface name is too long. Generate a smaller name.
 	nmLen1 := len(inConIntfNm)
 	nmLen2 := len(localPod.Name)
 	if nmLen1 > 5 {
@@ -122,12 +122,14 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 	locInf, err := net.InterfaceByName(hostEndVeth.LinkName)
 	wireDefRemot := mpb.WireDef{
 		/*PeerIntfId : this is the interface id on which the host machine will receive grpc
-		packets from the remote container, as well it will receive the packets coming
-		from the local pod/container. Packets comming from local container will be encapsulated
-		in grpc and send it to the peer, thorugh this interface only. The remote pod must send
-		packets to this interface for this grpc-wire, to reach the connected container in this node.
-		For remote pod this must be the destination interface id to reach the connected pod in this
-		node. Deo form remote pods perspective this is "PeerIntfId"  */
+		packets from the remote pod, as well it will be used to send packets to the remote pod. 
+		Packets coming from local pods will be encapsulated	in grpc and send it to the peer 
+		node, through this interface. 
+		
+		The remote pod must send packets to this interface for this grpc-wire, to reach 
+		the connected container in this node. For remote pod this must be the destination 
+		interface id to reach the connected pod in this node. Form remote pods perspective, 
+		the local interface of this machine is the  "PeerIntfId" for the remote */
 		PeerIntfId: int64(locInf.Index),
 
 		/* PeerIp: Ip address of the peer machine/node.
@@ -137,7 +139,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		 * packets over grpc wire. */
 		PeerIp: localPod.SrcIp,
 
-		/* We need to tell the remote node, what is the kne specified in contier intrface name.
+		/* We need to tell the remote node, what is the kne specified in container interface name.
 		   We also need to tell to which network namespace the pod in remote node belongs to. */
 		IntfNameInPod: link.PeerIntf,
 		LocalPodNetNs: peerPod.NetNs,
@@ -159,17 +161,18 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 			link.Uid, peerPod.Name, link.PeerIntf, peerPod.SrcIp)
 	}
 
-	/*remote has finished its job. Register local end of the grpc wire with the daemon and start the packet sending thread. */
+	/* remote has finished its job. Register local end of the grpc wire with the daemon 
+	   and start the packet sending thread. */
 	wireDefLocal := mpb.WireDef{
 		/*PeerIntfId : this is the interface id to which the host/local machine will send grpc
 		  packets for the remote pod. This interface id will be encoded in every packet
 		  sent over this grpc-wire. This interface id is created in the remote machine and
-		  communicated by the remote machine. Avalability of this interface id indicates remote
+		  communicated by the remote machine. Availability of this interface id indicates remote
 		  machine is ready to receive packets over this grpc-wire. Remote machine will use this
 		  interface id to pass the packets to the remote pod. */
 		PeerIntfId: creatResp.PeerIntfId,
 
-		/* PeerIp : Ip addredd of the remote node, to which this local node is sending packets over
+		/* PeerIp : Ip address of the remote node, to which this local node is sending packets over
 		   this grpc-wire.
 		*/
 		PeerIp: peerPod.SrcIp,
