@@ -453,20 +453,27 @@ type WireDef struct {
 	unknownFields protoimpl.UnknownFields
 
 	// The remote machine interface id, to which this wire is connected to.
+	// When local machine sends a packet to remote mahcine over grpc-wire,
+	// then along with the packet data, local machine also sends the interface id
+	// to whihc this packet needs to delivered in remote machine. It avoid any
+	// per packet interface lookup at the remote end. Packet delivery becomes an O(1)
+	// operation at remote end.
 	PeerIntfId int64 `protobuf:"varint,1,opt,name=peer_intf_id,json=peerIntfId,proto3" json:"peer_intf_id,omitempty"`
 	// The remote machine interface IP, to which this grpc wire is connected to.
 	PeerIp string `protobuf:"bytes,2,opt,name=peer_ip,json=peerIp,proto3" json:"peer_ip,omitempty"`
 	// Interface name, which comes from topology definition and to be put inside container.
 	// This filed is used when grpc-wire to be created.
 	IntfNameInPod string `protobuf:"bytes,3,opt,name=intf_name_in_pod,json=intfNameInPod,proto3" json:"intf_name_in_pod,omitempty"`
-	// Network name space of the pod which is connected to this grpc-wire"
+	// Network name space of the local pod which is connected to this grpc-wire"
 	LocalPodNetNs string `protobuf:"bytes,4,opt,name=local_pod_net_ns,json=localPodNetNs,proto3" json:"local_pod_net_ns,omitempty"`
 	// Each meshnet link has a uid.
 	LinkUid int64 `protobuf:"varint,5,opt,name=link_uid,json=linkUid,proto3" json:"link_uid,omitempty"`
 	// Name of the local pod where this wire is getting added.
 	LocalPodNm string `protobuf:"bytes,6,opt,name=local_pod_nm,json=localPodNm,proto3" json:"local_pod_nm,omitempty"`
-	// The local node interface name, from where packet needs to be picked up for
-	// transporting to remote machine.
+	// Every interface in a pod is one end of a veth pair. The other end of the veth
+	// pair is with the local node. This is the name of  veth end, which is with the
+	// node. Packets coming from the pod will be picked up from this veth end and will
+	// be transported to the remote node over grpc wire.
 	VethNameLocalHost string `protobuf:"bytes,7,opt,name=veth_name_local_host,json=vethNameLocalHost,proto3" json:"veth_name_local_host,omitempty"`
 	KubeNs            string `protobuf:"bytes,8,opt,name=kube_ns,json=kubeNs,proto3" json:"kube_ns,omitempty"`
 	LocalPodIp        string `protobuf:"bytes,9,opt,name=local_pod_ip,json=localPodIp,proto3" json:"local_pod_ip,omitempty"`

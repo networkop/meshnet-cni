@@ -49,7 +49,12 @@ message RemotePod {
 
 /* The proto describes both end of a grpc-wire, the local end and the remote end. */
 message WireDef {
-    /* The remote machine interface id, to which this wire is connected to.*/
+    /* The remote machine interface id, to which this wire is connected to.
+       When local machine sends a packet to remote mahcine over grpc-wire,
+       then along with the packet data, local machine also sends the interface id 
+       to whihc this packet needs to delivered in remote machine. It avoid any 
+       per packet interface lookup at the remote end. Packet delivery becomes an O(1) 
+       operation at remote end. */
     int64 peer_intf_id = 1;
 
     /* The remote machine interface IP, to which this grpc wire is connected to. */
@@ -69,8 +74,10 @@ message WireDef {
     /* Name of the local pod where this wire is getting added. */
     string local_pod_nm = 6;
 
-    /* The local node interface name, from where packet needs to be picked up for 
-       transporting to remote machine.  */
+    /* Every interface in a pod is one end of a veth pair. The other end of the veth 
+       pair is with the local node. This is the name of  veth end, which is with the 
+       node. Packets coming from the pod will be picked up from this veth end and will 
+       be transported to the remote node over grpc wire.   */
     string veth_name_local_host = 7;
 
     string kube_ns = 8;

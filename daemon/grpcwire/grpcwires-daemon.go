@@ -27,16 +27,17 @@ type IntfIndex struct {
 }
 
 /* In a given node a veth-pair connects a pod with the meshnet daemon hosted in the node. This meshnet
-daemon provides the grpc-wire to the local pod and connet it with the remote pod over grpc. The node
-end of the veth-pair must have uniquince name with in the node. A node can have multiple pods. So there
-will be multiple veth-pairs for conneting multiple nodes and each of them (the node end) must have unique
-names. IntfIndex provides the sequentially incresing number which makes the name unique when added as
+daemon provides the grpc-wire service to connect the local pod with the remote pod over grpc. The node
+end of the veth-pair must have unique name with in the node. A node can have multiple pods. So there
+will be multiple veth-pairs for connecting multiple nodes to meshnet daemon and each of them (the node end) must have unique
+names. IntfIndex provides the sequentially increasing number which makes the name unique when added as
 suffix to the name.
 
-The reason we can not use meshnet link uid, as uid unique in a topology. What happens when multiple
++++tbd(explore it more) :The reason we can't use meshnet link uid, as uid unique in a topology. What happens when multiple
 topologies are running in the same cluster ?  I am not sure in that case all the link across multiple
 topologies will have unique uid or not. If not, then then using IntfIndex will still make the interface
-name unique (when used in the name).
+name unique (when used as in the name). When there are multiple topologies, then each topology will be in different
+namespace. So uid will be unique within the namespace.
 */
 var indexGen IntfIndex
 
@@ -47,27 +48,28 @@ func GetNextIndex() int64 {
 	return indexGen.currId
 }
 
+/*+++tbf: These constants has no utility other that helping in debugging. These can be removed later. */
 const (
 	HOST_CREATED_WIRE = iota
 	PEER_CREATED_WIRE
 )
 
 type GRPCWire struct {
-	Uid       int    // uid identify a perticular link in a topology as per meshnet crd
-	Namespace string // K8s namesapce this wire belongs to
+	Uid       int    // uid identify a particular link in a topology as per meshnet crd
+	Namespace string // K8s namespace this wire belongs to
 
 	/* Node information */
-	LocalNodeIntfID int64  // OS assigned interface ID of local node interface for this wire
-	LocalNodeIntfNm string // name of local node interface for this wire
+	LocalNodeIntfID int64  // OS assigned interface ID of local node interface
+	LocalNodeIntfNm string // name of local node interface
 
 	/* Pod information : where this wire is terminating in this node */
 	LocalPodIP     string // IP address of the local container who will consume packets over this wire. This is for debugging. This is generally not available when links are getting created and is not necessary also.
 	LocalPodNm     string // Name the local pod who will consume packets over this wire.
-	LocalPodIntfNm string // Name the interface which is inside the local container who will consume packets over this wire. This is for debugging
+	LocalPodIntfNm string // Name the interface which is inside the local pod who will consume packets over this wire. This is for debugging
 	LocalPodNetNS  string
 
 	/*Peer pod information*/
-	PeerInffID int64  // Peer node interface ID for this wire
+	PeerIntfID int64  // Peer node interface ID
 	PeerPodIP  string // Peer pod IP
 
 	IsReady       bool   // Is this wire ip.
@@ -82,15 +84,15 @@ type PodLink struct {
 	linkuid int
 }
 type IdToWireMap struct {
-	//map[link-uid]->wire-pointer
 	allWires map[PodLink]*GRPCWire
 	mu       sync.Mutex
 }
 
-/* A grpc-wire creation can be triggered by either host at the end of the wire. They can even trigger
- * it simultaneously. Irrespective of who triggers, successful creation needs activities at both host
- * end. Our intention is to finish the wire creation at the first trigger. This map keeps the list of
- * wires which are already crated and must not be recreated, if any second trigger is received.
+/* A grpc-wire creation (between pod A and pod B) can be triggered by either host hosting pod A, B. They
+ * can even trigger it simultaneously. Irrespective of who triggers, successful wire creation needs
+ * activities at both hosts end. Our intention is to finish the wire creation at the first trigger.
+ * This map keeps the list of wires which are already crated and must not be recreated, if any second
+ * trigger is received. This situation occurs when both the host triggers wire creation almost simultaneously.
  */
 var wiresByUID = IdToWireMap{
 	allWires: make(map[PodLink]*GRPCWire),
@@ -98,14 +100,14 @@ var wiresByUID = IdToWireMap{
 
 type GRPCWireHandleMap struct {
 	/* Used when a packet is received, then we know the id of the interface to which the packet to be delivered.
-	   This map take interface-id as key adn returns the corresponding pcap-handle for delivering the packet.
-	   map[interface-id]->pcap-handle */
+	   This map take interface-id as key and returns the corresponding handle for delivering the packet.
+	   map[interface-id]->handle */
 	allHandles map[int64]*pcap.Handle
 	mu         sync.Mutex
 }
 
 /*
-  map[host-interface-index]->pacp-handle to deliver packets to the container
+  map[host-interface-index]->handle to deliver packets to the container
 */
 var wireHndlsByIntfIdx GRPCWireHandleMap
 
@@ -129,7 +131,8 @@ func GetAllActiveWires(kubeNs string, podNm string) ([]*GRPCWire, bool) {
 func GetActiveWire(linkuid int, netns string) (*GRPCWire, bool) {
 
 	if wiresByUID.allWires == nil {
-		return &GRPCWire{}, false
+		return nil, false
+		//return &GRPCWire{}, false
 	}
 
 	val, ok := wiresByUID.allWires[PodLink{
@@ -145,7 +148,7 @@ func GetActiveWire(linkuid int, netns string) (*GRPCWire, bool) {
 
 //-------------------------------------------------------------------------------------------------
 func AddActiveWire(wire *GRPCWire, handle *pcap.Handle) int {
-	/* Populate the actiwire map and returns the number of currently added active wire. */
+	/* Populate the active wire map and returns the number of currently added active wires. */
 	wiresByUID.mu.Lock()
 	defer wiresByUID.mu.Unlock()
 
@@ -172,7 +175,7 @@ func AddActiveWire(wire *GRPCWire, handle *pcap.Handle) int {
 
 //-------------------------------------------------------------------------------------------------
 func RemActiveWireMaps(wire *GRPCWire) int {
-	/* Populate the actiwire map and returns the number of currently added active wire. */
+	/* Cleanup the active wire map and returns the number of currently added active wire. */
 	wiresByUID.mu.Lock()
 	defer wiresByUID.mu.Unlock()
 
@@ -222,6 +225,7 @@ func RemWireFrmPod(kubeNs string, podNm string) error {
 		}
 	}
 
+	// only reports the first error
 	return fmt.Errorf("Error while removing GRPC wire for pod %s. err:%v", podNm, fstErr)
 }
 
@@ -234,12 +238,12 @@ func RemWire(wire *GRPCWire) error {
 	/* Remove the veth from the node */
 	intf, err := net.InterfaceByIndex(int(wire.LocalNodeIntfID))
 	if err != nil {
-		return fmt.Errorf("Could not retrive interface data for interface index %d, for link %d. err:%v", wire.LocalNodeIntfID, wire.Uid, err)
+		return fmt.Errorf("Could not retrieve interface data for interface index %d, for link %d. err:%v", wire.LocalNodeIntfID, wire.Uid, err)
 	}
 	myVeth := koko.VEth{}
 	myVeth.LinkName = intf.Name
 	if err = myVeth.RemoveVethLink(); err != nil {
-		return fmt.Errorf("Error removing Veth link: %s", err)
+		return fmt.Errorf("Error removing veth link: %s", err)
 	}
 
 	RemActiveWireMaps(wire)
@@ -260,13 +264,16 @@ func GetHostIntfHndl(intfID int64) (*pcap.Handle, error) {
 }
 
 //-----------------------------------------------------------------------------------------------------------
-func CreateGRPCWireRemoteTriggered(wireDefRemot *mpb.WireDef, stopC *chan bool) (*GRPCWire, error) {
+/*
+	When the remote peer tells the local node to creat the local end of the grpc-wire
+*/
+func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC *chan bool) (*GRPCWire, error) {
 
 	var err error
 
 	/* If this link already created then do nothing. This can happen due to a race between the local and remote peer.
 	   We will allow only one to complete the creation. */
-	grpcwire, ok := GetActiveWire(int(wireDefRemot.LinkUid), wireDefRemot.LocalPodNetNs)
+	grpcwire, ok := GetActiveWire(int(wireDef.LinkUid), wireDef.LocalPodNetNs)
 	if (ok == true) && (grpcwire.IsReady == true) {
 		who := ""
 		if grpcwire.HowCreated == HOST_CREATED_WIRE {
@@ -276,14 +283,14 @@ func CreateGRPCWireRemoteTriggered(wireDefRemot *mpb.WireDef, stopC *chan bool) 
 		} else {
 			who = "unknown host"
 		}
-		log.Infof("This grpc-wire is already created by %s. Local interface id : %d peer interface id : %d", who, grpcwire.LocalNodeIntfID, grpcwire.PeerInffID)
+		log.Infof("This grpc-wire is already created by %s. Local interface id : %d peer interface id : %d", who, grpcwire.LocalNodeIntfID, grpcwire.PeerIntfID)
 		return grpcwire, nil
 	}
 
 	idVeth := GetNextIndex()
 	/*Linux has problem if the interface name is big. (+++todo: add the documentation here) */
-	nmLen1 := len(wireDefRemot.IntfNameInPod)
-	nmLen2 := len(wireDefRemot.LocalPodNm)
+	nmLen1 := len(wireDef.IntfNameInPod)
+	nmLen2 := len(wireDef.LocalPodNm)
 	if nmLen1 > 5 {
 		nmLen1 = 5
 	}
@@ -292,26 +299,28 @@ func CreateGRPCWireRemoteTriggered(wireDefRemot *mpb.WireDef, stopC *chan bool) 
 	}
 
 	//eth1host1-<index>
-	outIfNm := wireDefRemot.IntfNameInPod[0:nmLen1] + wireDefRemot.LocalPodNm[0:nmLen2] + "-" + strconv.FormatInt(idVeth, 10)
+	outIfNm := wireDef.IntfNameInPod[0:nmLen1] + wireDef.LocalPodNm[0:nmLen2] + "-" + strconv.FormatInt(idVeth, 10)
 
 	currNs, err := ns.GetCurrentNS()
 	/*+++todo : add error handling */
+
+	/* Create the veth to connect the pod with the meshnet daemon running on the node */
 	hostEndVeth := koko.VEth{
 		NsName:   currNs.Path(),
 		LinkName: outIfNm,
 	}
 
-	inIfNm := wireDefRemot.IntfNameInPod
+	inIfNm := wireDef.IntfNameInPod
 	inContainerVeth := koko.VEth{
-		NsName:   wireDefRemot.LocalPodNetNs,
+		NsName:   wireDef.LocalPodNetNs,
 		LinkName: inIfNm,
 	}
 
-	if wireDefRemot.LocalPodIp != "" {
-		ipAddr, ipSubnet, err := net.ParseCIDR(wireDefRemot.LocalPodIp)
+	if wireDef.LocalPodIp != "" {
+		ipAddr, ipSubnet, err := net.ParseCIDR(wireDef.LocalPodIp)
 		if err != nil {
 			return nil, fmt.Errorf("While creating remote end of GRPC wire(%s@%s), failed to parse CIDR %s: %s",
-				inIfNm, wireDefRemot.LocalPodNm, wireDefRemot.LocalPodIp, err)
+				inIfNm, wireDef.LocalPodNm, wireDef.LocalPodIp, err)
 		}
 		inContainerVeth.IPAddr = []net.IPNet{{
 			IP:   ipAddr,
@@ -330,26 +339,27 @@ func CreateGRPCWireRemoteTriggered(wireDefRemot *mpb.WireDef, stopC *chan bool) 
 	}
 	log.Infof("On Remote Trigger: Successfully created vEth pair (in(name):%s <--> out(name-index):%s:%d).", inIfNm, outIfNm, locInf.Index)
 	aWire := GRPCWire{
-		Uid: int(wireDefRemot.LinkUid),
+		Uid: int(wireDef.LinkUid),
 
 		LocalNodeIntfID: int64(locInf.Index),
 		LocalNodeIntfNm: hostEndVeth.LinkName,
-		LocalPodIP:      "Not Available",
-		LocalPodIntfNm:  wireDefRemot.IntfNameInPod,
-		LocalPodNm:      wireDefRemot.LocalPodNm,
-		LocalPodNetNS:   wireDefRemot.LocalPodNetNs,
+		LocalPodIP:      wireDef.LocalPodIp,
+		LocalPodIntfNm:  wireDef.IntfNameInPod,
+		LocalPodNm:      wireDef.LocalPodNm,
+		LocalPodNetNS:   wireDef.LocalPodNetNs,
 
-		PeerInffID: wireDefRemot.PeerIntfId,
-		PeerPodIP:  wireDefRemot.PeerIp,
+		PeerIntfID: wireDef.PeerIntfId,
+		PeerPodIP:  wireDef.PeerIp,
 
 		IsReady:       true,
 		HowCreated:    PEER_CREATED_WIRE,
-		CreaterHostIP: wireDefRemot.PeerIp,
+		CreaterHostIP: wireDef.PeerIp,
 
 		StopC:     *stopC,
-		Namespace: wireDefRemot.KubeNs,
+		Namespace: wireDef.KubeNs,
 	}
-
+	/*+++think: As an alternative to google gopacket(pcap), a socket based implementation is possible.
+	  Not sure if socket based implementation can bring any advantage or not */
 	handle, err := pcap.OpenLive(hostEndVeth.LinkName, 65365, true, pcap.BlockForever)
 	if err != nil {
 		log.Fatalf("Could not open interface for sed/recv packets for containers. error:%v", err)
@@ -399,50 +409,32 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 		var packet gopacket.Packet
 		select {
 		case <-(wire.StopC):
-			log.Printf("Receive thread closing connection with peer: %s@%d", wire.PeerPodIP, wire.PeerInffID)
+			log.Printf("Receive thread closing connection with peer: %s@%d", wire.PeerPodIP, wire.PeerIntfID)
 			break
 		case packet = <-in:
-			// Decode for debugging
-			// pktType := "Others"
-			// ethernetLayer := packet.Layer(layers.LayerTypeEthernet)
-			// // if ethernetLayer != nil {
-			// ethernetPacket, _ := ethernetLayer.(*layers.Ethernet)
-			// if ethernetPacket.EthernetType == 0x86DD {
-			// 	pktType = "IPv6"
-			// } else if ethernetPacket.EthernetType == 0x0806 {
-			// 	pktType = "ARP"
-			// } else if ethernetPacket.EthernetType == 0x0800 {
-			// 	pktType = "IPv4"
-			// }
-			// ipLayer := packet.Layer(layers.LayerTypeIPv4)
-			// if ipLayer != nil {
-			// 	ipPacket, _ := ipLayer.(*layers.IPv4)
-			// 	if ipPacket.Protocol == 0x1 {
-			// 		pktType = "IPv4:ICMP"
-			// 	}
-			// }
-			// log.Printf("+++Daemon(RecvFrmLocalPodThread): Sent pkt to remote[pkt_type:%s, bytes: %d, Dest intf: %s@%d]", pktType, len(packet.Data()), wire.PeerPodIP, wire.PeerInffID)
 			data := packet.Data()
 			payload := &mpb.Packet{
-				RemotIntfId: wire.PeerInffID,
+				RemotIntfId: wire.PeerIntfID,
 				Frame:       data,
 				FrameLen:    int64(len(data)),
 			}
 
 			/*+++TODO: Ethernet has a minimum frame size of 64 bytes, comprising an 18-byte header and a payload of 46 bytes.
 			It also has a maximum frame size of 1518 bytes, in which case the payload is 1500 bytes.
-			This logic needs to be better, take the interface MTU not hardeoded value of 1518 */
+			This logic needs to be better, take the interface MTU not hardcoded value of 1518.
+			This is a very unusual condition to receive an packet from the pod with size > MTU. This can only happens if
+			things gets really messed up.   */
 			if payload.FrameLen > 1518 {
 				pktType := DecodePkt(payload.Frame)
-				log.Infof("+++Daemon(RecvFrmLocalPodThread): Dropping:unusually large packet received from local pod. size: %d, pkt:%s", payload.FrameLen, pktType)
+				log.Infof("Daemon(RecvFrmLocalPodThread): Dropping:unusually large packet received from local pod. size: %d, pkt:%s", payload.FrameLen, pktType)
 			}
 			ok, err := (wireClient).SendToOnce(ctx, payload)
 			if err != nil || !ok.Response {
 				if err != nil {
-					log.Infof("+++Daemon(RecvFrmLocalPodThread): Failed to send packet to remote. err=%v", err)
+					log.Infof("Daemon(RecvFrmLocalPodThread): Failed to send packet to remote. err=%v", err)
 				} else {
 					err = fmt.Errorf("RecvFrmLocalPodThread:Failed to send packet to remote. GRPC return code: false")
-					log.Infof("+++Daemon(RecvFrmLocalPodThread):err= %v", err)
+					log.Infof("Daemon(RecvFrmLocalPodThread):err= %v", err)
 				}
 				return err
 			}

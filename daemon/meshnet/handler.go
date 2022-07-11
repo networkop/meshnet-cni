@@ -289,7 +289,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 		LocalPodNm:      wireDef.LocalPodNm,
 		LocalPodNetNS:   wireDef.LocalPodNetNs,
 
-		PeerInffID: wireDef.PeerIntfId,
+		PeerIntfID: wireDef.PeerIntfId,
 		PeerPodIP:  wireDef.PeerIp,
 
 		IsReady:       true,
@@ -362,7 +362,7 @@ func (m *Meshnet) GRPCWireExists(ctx context.Context, wireDef *mpb.WireDef) (*mp
 	wire, ok := grpcwire.GetActiveWire(int(wireDef.LinkUid), wireDef.LocalPodNetNs)
 
 	if ok && wire != nil {
-		return &mpb.WireCreateResponse{Response: ok, PeerIntfId: (*wire).PeerInffID}, nil
+		return &mpb.WireCreateResponse{Response: ok, PeerIntfId: (*wire).PeerIntfID}, nil
 	}
 
 	return &mpb.WireCreateResponse{Response: false, PeerIntfId: 0}, nil
