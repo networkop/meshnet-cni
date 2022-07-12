@@ -288,10 +288,10 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC *chan bool) (*GRP
 	}
 
 	idVeth := GetNextIndex()
-	/*Linux has problem if the interface name is big. (+++todo: add the documentation here) */
+	/*Linux has problem if the interface name is too big. (+++todo: add the documentation here) */
 	nmLen1 := len(wireDef.IntfNameInPod)
 	nmLen2 := len(wireDef.LocalPodNm)
-	if nmLen1 > 5 {
+	if nmLen1 > 5 { //+++todo : remove hard coding
 		nmLen1 = 5
 	}
 	if nmLen2 > 5 {

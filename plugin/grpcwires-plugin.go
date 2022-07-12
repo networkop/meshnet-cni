@@ -92,10 +92,10 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 	}
 
 	// Build koko's veth struct for the intf to be placed in the local node
-	// Linux has issue if interface name is too long. Generate a smaller name.
+	// Linux has issue if interface name is too long. Generate a smaller name. +++todo: add documentation here
 	nmLen1 := len(inConIntfNm)
 	nmLen2 := len(localPod.Name)
-	if nmLen1 > 5 {
+	if nmLen1 > 5 { //+++todo: remove hard coding
 		nmLen1 = 5
 	}
 	if nmLen2 > 5 {

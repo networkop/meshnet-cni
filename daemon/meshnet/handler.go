@@ -274,7 +274,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 	}
 
 	//+++think: Using google gopacket for packet receive. An alternative could be using socket. Not sure it it provides any advantage over gopacket.
-	wrHandle, err := pcap.OpenLive(wireDef.VethNameLocalHost, 1600, true, pcap.BlockForever)
+	wrHandle, err := pcap.OpenLive(wireDef.VethNameLocalHost, 65365, true, pcap.BlockForever)
 	if err != nil {
 		log.Fatalf("Could not open interface for send/recv packets for containers. error:%v", err)
 		return &mpb.BoolResponse{Response: false}, err
