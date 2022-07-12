@@ -274,7 +274,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 	}
 
 	//+++think: Using google gopacket for packet receive. An alternative could be using socket. Not sure it it provides any advantage over gopacket.
-	handle, err := pcap.OpenLive(wireDef.VethNameLocalHost, 1600, true, pcap.BlockForever)
+	wrHandle, err := pcap.OpenLive(wireDef.VethNameLocalHost, 1600, true, pcap.BlockForever)
 	if err != nil {
 		log.Fatalf("Could not open interface for send/recv packets for containers. error:%v", err)
 		return &mpb.BoolResponse{Response: false}, err
@@ -301,7 +301,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 		Namespace: wireDef.KubeNs,
 	}
 
-	grpcwire.AddActiveWire(&aWire, handle)
+	grpcwire.AddActiveWire(&aWire, wrHandle)
 
 	log.Infof("Starting the local packet receive thread for pod interface %s", wireDef.IntfNameInPod)
 	go grpcwire.RecvFrmLocalPodThread(&aWire)
@@ -312,7 +312,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 //------------------------------------------------------------------------------------------------------
 func (m *Meshnet) SendToOnce(ctx context.Context, pkt *mpb.Packet) (*mpb.BoolResponse, error) {
 
-	handle, err := grpcwire.GetHostIntfHndl(pkt.RemotIntfId)
+	wrHandle, err := grpcwire.GetHostIntfHndl(pkt.RemotIntfId)
 	if err != nil {
 		log.Printf("Daemon-Service-SendToOnce (wire id - %v): Could not find local handle. err:%v", pkt.RemotIntfId, err)
 		return &mpb.BoolResponse{Response: false}, err
@@ -324,7 +324,7 @@ func (m *Meshnet) SendToOnce(ctx context.Context, pkt *mpb.Packet) (*mpb.BoolRes
 	log.Printf("Daemon(SendToOnce): Received [bytes: %d, for local interface id: %d]. Sending it to local container", pkt.FrameLen, pkt.RemotIntfId)
 
 	if pkt.FrameLen <= 1518 {
-		err = handle.WritePacketData(pkt.Frame)
+		err = wrHandle.WritePacketData(pkt.Frame)
 		if err != nil {
 			log.Printf("Daemon-Service-SendToOnce (wire id - %v): Could not write packet(%d bytes) to local interface. err:%v", pkt.RemotIntfId, pkt.FrameLen, err)
 			return &mpb.BoolResponse{Response: false}, err

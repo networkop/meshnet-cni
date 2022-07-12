@@ -299,7 +299,7 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC *chan bool) (*GRP
 	}
 
 	//eth1host1-<index>
-	outIfNm := wireDef.IntfNameInPod[0:nmLen1] + wireDef.LocalPodNm[0:nmLen2] + "-" + strconv.FormatInt(idVeth, 10)
+	outIfNm := wireDef.IntfNameInPod[0:nmLen1] + wireDef.LocalPodNm[0:nmLen2] + "-g" + strconv.FormatInt(idVeth, 10)
 
 	currNs, err := ns.GetCurrentNS()
 	/*+++todo : add error handling */
@@ -360,13 +360,13 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC *chan bool) (*GRP
 	}
 	/*+++think: As an alternative to google gopacket(pcap), a socket based implementation is possible.
 	  Not sure if socket based implementation can bring any advantage or not */
-	handle, err := pcap.OpenLive(hostEndVeth.LinkName, 65365, true, pcap.BlockForever)
+	wrHandle, err := pcap.OpenLive(hostEndVeth.LinkName, 65365, true, pcap.BlockForever)
 	if err != nil {
 		log.Fatalf("Could not open interface for sed/recv packets for containers. error:%v", err)
 		return nil, err
 	}
 
-	AddActiveWire(&aWire, handle)
+	AddActiveWire(&aWire, wrHandle)
 	return &aWire, nil
 }
 
@@ -377,14 +377,14 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 	pktBuffSz := int32(1024 * 64)
 
 	url := strings.TrimSpace(fmt.Sprintf("%s:%s", wire.PeerPodIP, defaultPort))
-	handler, err := pcap.OpenLive(wire.LocalNodeIntfNm, pktBuffSz, true, pcap.BlockForever)
+	rdHandl, err := pcap.OpenLive(wire.LocalNodeIntfNm, pktBuffSz, true, pcap.BlockForever)
 	if err != nil {
 		log.Fatalf("Receive Thread for local pod failed to open interface: %s, PCAP ERROR: %v", wire.LocalNodeIntfNm, err)
 		return err
 	}
-	defer handler.Close()
+	defer rdHandl.Close()
 
-	err = handler.SetDirection(pcap.DirectionIn)
+	err = rdHandl.SetDirection(pcap.DirectionIn)
 	if err != nil {
 		log.Fatalf("Receive Thread for local pod failed to set up capture direction: %s, PCAP ERROR: %v", wire.LocalNodeIntfNm, err)
 		return err
@@ -400,7 +400,7 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	source := gopacket.NewPacketSource(handler, handler.LinkType())
+	source := gopacket.NewPacketSource(rdHandl, rdHandl.LinkType())
 
 	wireClient := mpb.NewWireProtocolClient(remote)
 
