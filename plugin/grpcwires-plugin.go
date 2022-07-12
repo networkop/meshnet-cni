@@ -55,6 +55,8 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		return nil
 	}
 
+	//+++think : I have doubt, if this check for links existence is an overkill or not.
+	//           Anyway this is a creation time check done once for a link. Not expensive.
 	wireDef := mpb.WireDef{
 		LocalPodNetNs: localPod.NetNs,
 		LinkUid:       link.Uid,
@@ -83,7 +85,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		return err
 	}
 
-	/* We need to make the node end of the v-eth pair name unique for this node. So get an unique id from daemon */
+	/* We need to make the node end of the v-eth pair name unique. So get an unique id from daemon */
 	localIntfDI, err := (*localClient).GenLocVEthID(*ctx, &mpb.ReqIntfID{InContIntfNm: inConIntfNm})
 	if err != nil {
 		return fmt.Errorf("Creating GRPC wire: could not get interface number for pod:%s. err:%v", localPod.Name, err)
@@ -99,6 +101,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 	if nmLen2 > 5 {
 		nmLen2 = 5
 	}
+	//examples:- eth1pod1-g1, eth5pod2-g2
 	locIfNm := inConIntfNm[0:nmLen1] + localPod.Name[0:nmLen2] + "-g" + strconv.FormatInt(localIntfDI.LocalIntfId, 10)
 
 	hostEndVeth := &koko.VEth{
@@ -120,23 +123,25 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 	}
 	remoteClient := mpb.NewRemoteClient(remote)
 	locInf, err := net.InterfaceByName(hostEndVeth.LinkName)
+	//+++tbd: add error handing
+
 	wireDefRemot := mpb.WireDef{
 		/*PeerIntfId : this is the interface id on which the host machine will receive grpc
-		packets from the remote pod, as well it will be used to send packets to the remote pod. 
-		Packets coming from local pods will be encapsulated	in grpc and send it to the peer 
-		node, through this interface. 
-		
-		The remote pod must send packets to this interface for this grpc-wire, to reach 
-		the connected container in this node. For remote pod this must be the destination 
-		interface id to reach the connected pod in this node. Form remote pods perspective, 
-		the local interface of this machine is the  "PeerIntfId" for the remote */
+		packets from the remote pod, as well it will be used to send packets to the remote pod.
+		Packets coming from local pods will be encapsulated	in grpc and send it to the peer
+		node, through this interface.
+
+		The remote pod must send packets to this interface for this grpc-wire, to reach
+		the connected container in this node. For remote pod this must be the destination
+		interface id to reach the connected pod in this node. From remote pods perspective,
+		the local interface of this machine is the "PeerIntfId" for the remote pod */
 		PeerIntfId: int64(locInf.Index),
 
 		/* PeerIp: Ip address of the peer machine/node.
-		 * For remote pod this must be the IP address on this host. The remote pod must
-		 * Transport packets to this pod (over grpc) in this local node. This is the IP
-		 * address of the local node which remote node will do a grpc dial, to send
-		 * packets over grpc wire. */
+		   For remote pod this must be the IP address on this host. The remote pod must
+		   Transport packets to this pod (over grpc) in this local node. This is the IP
+		   address of the local node which remote node will do a grpc dial, to send
+		   packets over grpc wire. */
 		PeerIp: localPod.SrcIp,
 
 		/* We need to tell the remote node, what is the kne specified in container interface name.
@@ -161,10 +166,10 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 			link.Uid, peerPod.Name, link.PeerIntf, peerPod.SrcIp)
 	}
 
-	/* remote has finished its job. Register local end of the grpc wire with the daemon 
+	/* remote has finished its job. Register local end of the grpc wire with the daemon
 	   and start the packet sending thread. */
 	wireDefLocal := mpb.WireDef{
-		/*PeerIntfId : this is the interface id to which the host/local machine will send grpc
+		/*PeerIntfId : this is the interface id (in the remote machine) to which the host/local machine will send grpc
 		  packets for the remote pod. This interface id will be encoded in every packet
 		  sent over this grpc-wire. This interface id is created in the remote machine and
 		  communicated by the remote machine. Availability of this interface id indicates remote

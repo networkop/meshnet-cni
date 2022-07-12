@@ -273,6 +273,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 		return &mpb.BoolResponse{Response: false}, err
 	}
 
+	//+++think: Using google gopacket for packet receive. An alternative could be using socket. Not sure it it provides any advantage over gopacket.
 	handle, err := pcap.OpenLive(wireDef.VethNameLocalHost, 1600, true, pcap.BlockForever)
 	if err != nil {
 		log.Fatalf("Could not open interface for send/recv packets for containers. error:%v", err)
@@ -325,7 +326,7 @@ func (m *Meshnet) SendToOnce(ctx context.Context, pkt *mpb.Packet) (*mpb.BoolRes
 	if pkt.FrameLen <= 1518 {
 		err = handle.WritePacketData(pkt.Frame)
 		if err != nil {
-			log.Printf("+++Daemon-Service-SendToOnce (wire id - %v): Could not write packet(%d bytes) to local interface. err:%v", pkt.RemotIntfId, pkt.FrameLen, err)
+			log.Printf("Daemon-Service-SendToOnce (wire id - %v): Could not write packet(%d bytes) to local interface. err:%v", pkt.RemotIntfId, pkt.FrameLen, err)
 			return &mpb.BoolResponse{Response: false}, err
 		}
 	} else {
