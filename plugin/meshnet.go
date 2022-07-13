@@ -18,6 +18,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	mpb "github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
 )
@@ -97,7 +98,7 @@ func getVxlanSource(nodeIP string) (string, string, error) {
 			}
 		}
 	}
-	return "", "", fmt.Errorf("No iface found for address %s", nodeIP)
+	return "", "", fmt.Errorf("no iface found for address %s", nodeIP)
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -150,7 +151,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	log.Infof("Processing ADD POD %s in namespace %s", cniArgs.K8S_POD_NAME, cniArgs.K8S_POD_NAMESPACE)
 
 	log.Infof("Attempting to connect to local meshnet daemon")
-	conn, err := grpc.Dial(localDaemon, grpc.WithInsecure())
+	conn, err := grpc.Dial(localDaemon, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Infof("Failed to connect to local meshnetd on %s", localDaemon)
 		return err
@@ -333,7 +334,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				url := fmt.Sprintf("%s:%s", peerPod.SrcIp, defaultPort)
 				log.Infof("Trying to do a remote update on %s", url)
 
-				remote, err := grpc.Dial(url, grpc.WithInsecure())
+				remote, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
 				if err != nil {
 					log.Infof("Failed to dial remote gRPC url %s", url)
 					return err
@@ -384,7 +385,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
-	conn, err := grpc.Dial(localDaemon, grpc.WithInsecure())
+	conn, err := grpc.Dial(localDaemon, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Infof("Failed to connect to local meshnetd on %s", localDaemon)
 		return err
@@ -400,7 +401,10 @@ func cmdDel(args *skel.CmdArgs) error {
 		LocalPodNm: string(cniArgs.K8S_POD_NAME),
 	}
 	/*+++todo: Add response handling */
-	meshnetClient.RemGRPCWire(ctx, &wireDef)
+	_, err = meshnetClient.RemGRPCWire(ctx, &wireDef)
+	if err != nil {
+		return fmt.Errorf("could not remove grpc wire: %v", err)
+	}
 
 	log.Infof("Retrieving pod's (%s@%s) metadata from meshnet daemon", string(cniArgs.K8S_POD_NAME), string(cniArgs.K8S_POD_NAMESPACE))
 	localPod, err := meshnetClient.Get(ctx, &mpb.PodQuery{
@@ -416,7 +420,10 @@ func cmdDel(args *skel.CmdArgs) error {
 	// By setting srcIP and NetNS to "" we're marking this POD as dead
 	localPod.NetNs = ""
 	localPod.SrcIp = ""
-	meshnetClient.SetAlive(ctx, localPod)
+	_, err = meshnetClient.SetAlive(ctx, localPod)
+	if err != nil {
+		return fmt.Errorf("could not set alive: %v", err)
+	}
 
 	log.Infof("Iterating over each link for clean-up")
 	for _, link := range localPod.Links { // Iterate over each link of the local pod
@@ -451,6 +458,10 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func SetInterNodeLinkType() {
+	// TODO: Find a more appropriate (if any) way to figure out intended link type
+	// As of today, daemon gets the intended link type from env INTER_NODE_LINK_TYPE
+	// which is set by deployment file. The daemon further propagates this to plugin
+	// via means of file on host (which is read below) containing the value GRPC or VXLAN
 	b, err := os.ReadFile("/etc/cni/net.d/meshnet-inter-node-link-type")
 	if err != nil {
 		log.Warningf("Could not read iner node link type: %v", err)

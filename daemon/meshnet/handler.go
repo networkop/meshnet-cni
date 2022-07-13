@@ -304,6 +304,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 	grpcwire.AddActiveWire(&aWire, wrHandle)
 
 	log.Infof("Starting the local packet receive thread for pod interface %s", wireDef.IntfNameInPod)
+	// TODO: handle error here
 	go grpcwire.RecvFrmLocalPodThread(&aWire)
 
 	return &mpb.BoolResponse{Response: true}, nil
@@ -331,7 +332,7 @@ func (m *Meshnet) SendToOnce(ctx context.Context, pkt *mpb.Packet) (*mpb.BoolRes
 		}
 	} else {
 		// WE should never reach here
-		log.Printf("Daemon-Service-SendToOnce (wire id - %v): Received unusually large size packet(%d bytes) from peer. Not delivering it to local pod")
+		log.Printf("Daemon-Service-SendToOnce (wire id - %v): Received unusually large size packet(%d bytes) from peer. Not delivering it to local pod", pkt.RemotIntfId, pkt.FrameLen)
 
 	}
 
@@ -346,6 +347,7 @@ func (m *Meshnet) AddGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (
 	wire, err := grpcwire.CreateGRPCWireRemoteTriggered(wireDef, &stopC)
 
 	if err == nil {
+		// TODO: handle error here
 		go grpcwire.RecvFrmLocalPodThread(wire)
 
 		return &mpb.WireCreateResponse{Response: true, PeerIntfId: wire.LocalNodeIntfID}, nil
