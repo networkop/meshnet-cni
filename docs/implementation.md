@@ -16,7 +16,7 @@ Each node in the cluster runs a CNI daemon set. This daemon in the node is respo
 
 # Details :-
 
-When a pod wants to send a packet to a remote pod, it writes it on the interface inside the pod. Pod is completely unaware of the overlay is being used.  The interface that a pod sees is one end of a veth pair. The other end of the verh pair is with meshnet daemon. The meshnet daemon receives any packet that a pod wants to send. Meshnet daemon uses the following proto to deliver the packet to the destination pod (on a different node).  
+When a pod wants to send a packet to a remote pod, it writes it on the interface inside the pod. Pod is completely unaware of the grpc overlay being used.  The interface that a pod sees is one end of a veth pair. The other end of the veth pair is with meshnet daemon. The meshnet daemon receives any packet that a pod wants to send. Meshnet daemon uses the following proto to deliver the packet to the destination pod (on a different node).  
 
 ```go    
 message Packet {
@@ -26,7 +26,7 @@ message Packet {
 }
 ```
 
-The packet itself carries the id of the destination interface. Destination interface is a interface in the remote node and the meshnet daemon in the remote machine has this interface. This destination interface is one ends of the veth pair and the other end of this veth pair is within the  destination pod. This is ensured during the wire creation time. So when the packet reaches the destination daemon, the demon simply writes the received packet on the interface carried by the packet itself. Since it's a veth pair the packet goes to the destination pod which is connected at the other end. It avoids any per packet lookup and packet delivery becomes an O(1) operation. 
+The packet itself carries the id of the destination interface. Destination interface is a interface in the remote node and the meshnet daemon in the remote machine has access to this interface. This destination interface is one end of the veth pair and the other end of this veth pair is within the  destination pod. This is ensured during the wire creation time. So when the packet reaches the destination daemon, the demon simply writes the received packet on the interface carried by the packet itself. Since it's a veth pair the packet goes to the destination pod which is connected at the other end. It avoids any per packet lookup and packet delivery becomes an O(1) operation. 
 
 Overall Tx/Rx mechanism is depicted in the picture below. 
 
