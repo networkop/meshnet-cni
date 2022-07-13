@@ -1,6 +1,6 @@
 # TLDR ;
 
-In K8S usually pods across nodes are connected using VxLAN/IPnIP/GRE overlay. Our objective is to connect these pods  over grpc. This provides point to point wire using grpc. One of the advantages, that is leveraged right now , is no reduction of MTU. For example adding VXLAN will reduce virtual interface MTU by 20 bytes. This will not be the case with grpc-wire, Virtual interface MTU remain 1500 (or can be made higher - not tried yet.)
+In K8S usually pods across nodes are connected using VxLAN/IPnIP/GRE overlay. Our objective is to connect these pods  over grpc. This provides point to point wire using grpc. One of the advantages, that is leveraged right now , is no reduction of MTU. For example adding VXLAN will reduce virtual interface MTU by 20 bytes. This will not be the case with grpc-wire, Virtual interface MTU remains 1500 (or can be made higher - not tried yet.)
 
 Let's take an example CRD as given in the picture below  
 ![CRD](./pics/crd.png)
