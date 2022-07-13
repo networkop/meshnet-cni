@@ -12,6 +12,7 @@ import (
 	koko "github.com/redhat-nfvpe/koko/api"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 //-----------------------------------------------------------------------------------------------------------
@@ -25,7 +26,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		link.Uid, peerPod.Name, link.PeerIntf, peerPod.SrcIp)
 
 	if ctx == nil || link == nil {
-		return fmt.Errorf("Can't establish grpc channel. Either link or context not provided. ctx:%p, link:%p", ctx, link)
+		return fmt.Errorf("can't establish grpc channel. Either link or context not provided. ctx:%p, link:%p", ctx, link)
 	}
 
 	log.Infof("Checking if we've been skipped")
@@ -43,7 +44,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 	// Comparing names to determine higher priority
 	higherPrio := localPod.Name > peerPod.Name
 
-	if isSkipped.Response == false && higherPrio == false {
+	if !isSkipped.Response && !higherPrio {
 		/*  If peer POD skipped us (booted before us) or we have a higher priority then we initiate the tunnel.
 		If peer POD has not skipped us (that means yet to boot or just booted) and it has higher priority
 		the we do not initiate the grpc tunnel. When the high priority peer pod boots up (or get ready) then
@@ -63,7 +64,10 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		KubeNs:        localPod.KubeNs,
 	}
 	resp, err := (*localClient).GRPCWireExists(*ctx, &wireDef)
-	if resp.Response == true {
+	if err != nil {
+		return fmt.Errorf("could not check grpc wire: %v", err)
+	}
+	if resp.Response {
 		/* While this pod was busy creating other links or was busy with some other task, the remote
 		   pod had finished creating this grpc-link.  */
 		log.Infof("This grpc wire is already set by the remote peer. Local interface id:%d", resp.PeerIntfId)
@@ -74,7 +78,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 
 	currNs, err := ns.GetCurrentNS()
 	if err != nil {
-		return fmt.Errorf("Creating GRPC wire: failed to get current ns for pod %s, err: %v", localPod.Name, err)
+		return fmt.Errorf("creating GRPC wire: failed to get current ns for pod %s, err: %v", localPod.Name, err)
 	}
 
 	// Build koko's veth struct for the intf to be placed inside the pod
@@ -88,7 +92,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 	/* We need to make the node end of the v-eth pair name unique. So get an unique id from daemon */
 	localIntfDI, err := (*localClient).GenLocVEthID(*ctx, &mpb.ReqIntfID{InContIntfNm: inConIntfNm})
 	if err != nil {
-		return fmt.Errorf("Creating GRPC wire: could not get interface number for pod:%s. err:%v", localPod.Name, err)
+		return fmt.Errorf("creating GRPC wire: could not get interface number for pod:%s. err:%v", localPod.Name, err)
 	}
 
 	// Build koko's veth struct for the intf to be placed in the local node
@@ -109,7 +113,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		NsName:   currNs.Path()}
 
 	if err = koko.MakeVeth(*inContainerVeth, *hostEndVeth); err != nil { //+++think: order in which the argument are passed - does it matter ?
-		return fmt.Errorf("Creating GRPC wire: failed to create vEth-pair inside pod (%s:%s) and on host (%s). err:%s",
+		return fmt.Errorf("creating GRPC wire: failed to create vEth-pair inside pod (%s:%s) and on host (%s). err:%s",
 			localPod.Name, inContainerVeth.LinkName, hostEndVeth.LinkName, err)
 	}
 
@@ -117,12 +121,15 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 
 	url := fmt.Sprintf("%s:%s", peerPod.SrcIp, defaultPort)
 	url = strings.TrimSpace(url)
-	remote, err := grpc.Dial(url, grpc.WithInsecure())
+	remote, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return fmt.Errorf("Creating GRPC wire: failed to dial remote gRPC url %s", url)
+		return fmt.Errorf("creating GRPC wire: failed to dial remote gRPC url %s", url)
 	}
 	remoteClient := mpb.NewRemoteClient(remote)
 	locInf, err := net.InterfaceByName(hostEndVeth.LinkName)
+	if err != nil {
+		return fmt.Errorf("could not get interface by name: %v", err)
+	}
 	//+++tbd: add error handing
 
 	wireDefRemot := mpb.WireDef{
@@ -159,9 +166,9 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 	log.Infof("Create GRPC wire: dialing remote node-->%s@%s", peerPod.Name, url)
 	creatResp, err := (remoteClient).AddGRPCWireRemote(*ctx, &wireDefRemot)
 	if err != nil {
-		return fmt.Errorf("Error: Failed to create grpc tunnel ar remote end:%s  err:%v", url, err)
-	} else if creatResp.Response == false {
-		return fmt.Errorf("Remote end of the grpc-wire (local-pod:%s:%s@node:%s <----link uid: %d----> remote-pod:%s:%s@node:%s) is not up",
+		return fmt.Errorf("failed to create grpc tunnel ar remote end:%s  err:%v", url, err)
+	} else if !creatResp.Response {
+		return fmt.Errorf("remote end of the grpc-wire (local-pod:%s:%s@node:%s <----link uid: %d----> remote-pod:%s:%s@node:%s) is not up",
 			localPod.Name, link.LocalIntf, localPod.SrcIp,
 			link.Uid, peerPod.Name, link.PeerIntf, peerPod.SrcIp)
 	}
@@ -198,9 +205,9 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 	log.Infof("Creating GRPC wire: adding the local end of the grpc tunnel.")
 	r, err := (*localClient).AddGRPCWireLocal(*ctx, &wireDefLocal)
 	if err != nil {
-		return fmt.Errorf("Error: Failed to create local end of the tunnel %v", err)
-	} else if r.Response == false {
-		return fmt.Errorf("Local end of the grpc-wire (local-pod:-%s:%s@node:%s <----link uid: %d----> remote-pod:-%s:%s@node:%s) is not up",
+		return fmt.Errorf("failed to create local end of the tunnel %v", err)
+	} else if !r.Response {
+		return fmt.Errorf("local end of the grpc-wire (local-pod:-%s:%s@node:%s <----link uid: %d----> remote-pod:-%s:%s@node:%s) is not up",
 			localPod.Name, link.LocalIntf, localPod.SrcIp,
 			link.Uid, peerPod.Name, link.PeerIntf, peerPod.SrcIp)
 	}

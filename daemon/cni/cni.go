@@ -118,6 +118,7 @@ func Init() error {
 
 	conf["plugins"] = plugins
 
+	// TODO: check if we can avoid creating a custom file for propagating value of env INTER_NODE_LINK_TYPE
 	if err := saveInterNodeLinkConf(); err != nil {
 		return err
 	}

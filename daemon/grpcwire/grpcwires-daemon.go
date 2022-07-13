@@ -17,9 +17,8 @@ import (
 	koko "github.com/redhat-nfvpe/koko/api"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
-
-const locPdIntfNmPrefix = "-grpc"
 
 type IntfIndex struct {
 	currId int64
@@ -103,7 +102,7 @@ type GRPCWireHandleMap struct {
 	   This map take interface-id as key and returns the corresponding handle for delivering the packet.
 	   map[interface-id]->handle */
 	allHandles map[int64]*pcap.Handle
-	mu         sync.Mutex
+	// mu         sync.Mutex
 }
 
 /*
@@ -274,7 +273,7 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC *chan bool) (*GRP
 	/* If this link already created then do nothing. This can happen due to a race between the local and remote peer.
 	   We will allow only one to complete the creation. */
 	grpcwire, ok := GetActiveWire(int(wireDef.LinkUid), wireDef.LocalPodNetNs)
-	if (ok == true) && (grpcwire.IsReady == true) {
+	if ok && grpcwire.IsReady {
 		who := ""
 		if grpcwire.HowCreated == HOST_CREATED_WIRE {
 			who = "local host"
@@ -302,6 +301,9 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC *chan bool) (*GRP
 	outIfNm := wireDef.IntfNameInPod[0:nmLen1] + wireDef.LocalPodNm[0:nmLen2] + "-g" + strconv.FormatInt(idVeth, 10)
 
 	currNs, err := ns.GetCurrentNS()
+	if err != nil {
+		return nil, fmt.Errorf("could not get current network namespace: %v", err)
+	}
 	/*+++todo : add error handling */
 
 	/* Create the veth to connect the pod with the meshnet daemon running on the node */
@@ -384,13 +386,13 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 	}
 	defer rdHandl.Close()
 
-	err = rdHandl.SetDirection(pcap.DirectionIn)
+	err = rdHandl.SetDirection(pcap.Direction(pcap.DirectionIn))
 	if err != nil {
 		log.Fatalf("Receive Thread for local pod failed to set up capture direction: %s, PCAP ERROR: %v", wire.LocalNodeIntfNm, err)
 		return err
 	}
 
-	remote, err := grpc.Dial(url, grpc.WithInsecure())
+	remote, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Infof("RecvFrmLocalPodThread:Failed to connect to remote %s", url)
 		return err
@@ -440,7 +442,6 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 			}
 		}
 	}
-	return nil
 }
 
 //------------------------------------------------------------------------------------------------------
@@ -468,11 +469,11 @@ func DecodePkt(frame []byte) string {
 						if tcpPkt.DstPort == 179 {
 							pktType = pktType + ":BGP"
 						} else {
-							pktType = pktType + fmt.Sprint("[Port:%d]", tcpPkt.DstPort)
+							pktType = pktType + fmt.Sprintf("[Port:%d]", tcpPkt.DstPort)
 						}
 					}
 				} else {
-					pktType = fmt.Sprint("IPv4 with protocol : %d", ipPacket.Protocol)
+					pktType = fmt.Sprintf("IPv4 with protocol : %d", ipPacket.Protocol)
 				}
 			}
 		} else if ethernetPacket.EthernetType == 0x86DD {
