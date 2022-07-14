@@ -103,13 +103,19 @@ reset-kind: down up install
 
 .PHONY: install-gcp
 ## Install meshnet into a test cluster
-install-gcp: uninstall-gcp kustomize-gcp
-	# - docker tag ${DOCKER_IMAGE}:${COMMIT} gcr.io/kt-nts-athena-dev/${DOCKER_IMAGE}:${COMMIT}
+# install-gcp: kustomize-gcp
+# 	- docker tag ${DOCKER_IMAGE}:${COMMIT} ${GCP_TAG}
+# 	- echo ${GCP_TAG}
+# 	- docker push ${GCP_TAG}
+# 	- kustomize build manifests/overlays/grpc-link-gcp  | kubectl apply -f -
+
+install-gcp: kustomize-gcp
 	- docker tag ${DOCKER_IMAGE}:${COMMIT} ${GCP_TAG}
-	#- docker push gcr.io/kt-nts-athena-dev/${DOCKER_IMAGE}:${COMMIT}
 	- echo ${GCP_TAG}
 	- docker push ${GCP_TAG}
 	- kustomize build manifests/overlays/grpc-link-gcp  | kubectl apply -f -
+
+
 
 .PHONY: uninstall-gcp
 uninstall-gcp: 

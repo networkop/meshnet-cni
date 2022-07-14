@@ -23,4 +23,4 @@ kustomize-kops: kust-ensure
 
 .PHONY: kustomize-gcp
 kustomize-gcp: kust-ensure
-	cd manifests/overlays/grpc-link-gcp && $(GOPATH)/bin/kustomize edit set image ${DOCKER_IMAGE}:${GCP_TAG}
+	cd manifests/overlays/grpc-link-gcp && $(GOPATH)/bin/kustomize edit set image ${DOCKER_IMAGE}=${GCP_TAG} 
