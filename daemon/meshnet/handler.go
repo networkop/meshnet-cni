@@ -338,11 +338,10 @@ func (m *Meshnet) SendToOnce(ctx context.Context, pkt *mpb.Packet) (*mpb.BoolRes
 }
 
 //---------------------------------------------------------------------------------------------------------------
-
 func (m *Meshnet) AddGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (*mpb.WireCreateResponse, error) {
 
-	stopC := make(chan (bool))
-	wire, err := grpcwire.CreateGRPCWireRemoteTriggered(wireDef, &stopC)
+	stopC := make(chan struct{})
+	wire, err := grpcwire.CreateGRPCWireRemoteTriggered(wireDef, stopC)
 
 	if err == nil {
 		// TODO: handle error here

@@ -87,7 +87,7 @@ type GRPCWire struct {
 	Originator   grpcWireOriginator // create by local host or create on trigger from remote host. This is for debugging.
 	OriginatorIP string             // IP address of the host created it. This is for debugging.
 
-	StopC chan bool // the channel to send stop signal to the receive thread.
+	StopC chan struct{} // the channel to send stop signal to the receive thread.
 }
 
 type linkKey struct {
@@ -232,7 +232,7 @@ func DeleteWiresByPod(namespace string, podName string) error {
 func RemoveWire(wire *GRPCWire) error {
 
 	/* stop the packet receive thread for this pod */
-	wire.StopC <- true
+	close(wire.StopC)
 
 	/* Remove the veth from the node */
 	intf, err := net.InterfaceByIndex(int(wire.LocalNodeIntfID))
@@ -266,7 +266,7 @@ func GetHostIntfHndl(intfID int64) (*pcap.Handle, error) {
 /*
 	When the remote peer tells the local node to creat the local end of the grpc-wire
 */
-func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC *chan bool) (*GRPCWire, error) {
+func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*GRPCWire, error) {
 
 	var err error
 
@@ -349,7 +349,7 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC *chan bool) (*GRP
 		Originator:   PEER_CREATED_WIRE,
 		OriginatorIP: wireDef.PeerIp,
 
-		StopC:     *stopC,
+		StopC:     stopC,
 		Namespace: wireDef.KubeNs,
 	}
 	/*+++think: As an alternative to google gopacket(pcap), a socket based implementation is possible.
@@ -395,12 +395,11 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 	defer cancel()
 
 	source := gopacket.NewPacketSource(rdHandl, rdHandl.LinkType())
-
 	wireClient := mpb.NewWireProtocolClient(remote)
 
 	in := source.Packets()
+	var packet gopacket.Packet
 	for {
-		var packet gopacket.Packet
 		select {
 		case <-wire.StopC:
 			log.Printf("Receive thread closing connection with peer: %s@%d", wire.PeerPodIP, wire.PeerIntfID)
