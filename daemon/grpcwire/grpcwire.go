@@ -101,7 +101,7 @@ type wireMap struct {
 	handles map[int64]*pcap.Handle
 }
 
-func (w wireMap) GetWire(namespace string, linkUID int) (*GRPCWire, bool) {
+func (w *wireMap) GetWire(namespace string, linkUID int) (*GRPCWire, bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	wire, ok := w.wires[linkKey{
@@ -111,14 +111,14 @@ func (w wireMap) GetWire(namespace string, linkUID int) (*GRPCWire, bool) {
 	return wire, ok
 }
 
-func (w wireMap) GetHandle(key int64) (*pcap.Handle, bool) {
+func (w *wireMap) GetHandle(key int64) (*pcap.Handle, bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	handle, ok := w.handles[key]
 	return handle, ok
 }
 
-func (w wireMap) Add(wire *GRPCWire, handle *pcap.Handle) error {
+func (w *wireMap) Add(wire *GRPCWire, handle *pcap.Handle) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.wires[linkKey{
@@ -130,7 +130,7 @@ func (w wireMap) Add(wire *GRPCWire, handle *pcap.Handle) error {
 	return nil
 }
 
-func (w wireMap) Delete(wire *GRPCWire) error {
+func (w *wireMap) Delete(wire *GRPCWire) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	delete(w.wires, linkKey{
@@ -147,7 +147,7 @@ func (w wireMap) Delete(wire *GRPCWire) error {
  * This map keeps the list of wires which are already crated and must not be recreated, if any second
  * trigger is received. This situation occurs when both the host triggers wire creation almost simultaneously.
  */
-var wires = wireMap{
+var wires = &wireMap{
 	wires: map[linkKey]*GRPCWire{},
 	/* Used when a packet is received, then we know the id of the interface to which the packet to be delivered.
 	   This map take interface-id as key and returns the corresponding handle for delivering the packet.
@@ -208,7 +208,7 @@ func DeleteWiresByPod(namespace string, podName string) error {
 	}
 
 	resp := true
-	var fstErr error = nil
+	var fstErr error
 	for _, w := range wires {
 		if err := RemoveWire(w); err != nil {
 			log.Infof("Error while removing GRPC wire for  pod: %s@%s. err:%v", w.LocalPodIntfNm, w.LocalPodNm, err)
@@ -225,7 +225,7 @@ func DeleteWiresByPod(namespace string, podName string) error {
 	}
 
 	// only reports the first error
-	return fmt.Errorf("Error while removing GRPC wire for pod %s. err:%v", podName, fstErr)
+	return fmt.Errorf("failed to remove gRPC wire for pod %s: %w", podName, fstErr)
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -237,12 +237,12 @@ func RemoveWire(wire *GRPCWire) error {
 	/* Remove the veth from the node */
 	intf, err := net.InterfaceByIndex(int(wire.LocalNodeIntfID))
 	if err != nil {
-		return fmt.Errorf("Could not retrieve interface data for interface index %d, for link %d. err:%v", wire.LocalNodeIntfID, wire.UID, err)
+		return fmt.Errorf("failed to etrieve interface data for interface index %d, for link %d: %w", wire.LocalNodeIntfID, wire.UID, err)
 	}
 	myVeth := koko.VEth{}
 	myVeth.LinkName = intf.Name
 	if err = myVeth.RemoveVethLink(); err != nil {
-		return fmt.Errorf("Error removing veth link: %s", err)
+		return fmt.Errorf("failed to remove veth link: %w", err)
 	}
 
 	DeleteWire(wire)
@@ -258,7 +258,7 @@ func GetHostIntfHndl(intfID int64) (*pcap.Handle, error) {
 	if ok {
 		return val, nil
 	}
-	return nil, fmt.Errorf("Interface %d is not active.", intfID)
+	return nil, fmt.Errorf("interface %d is not active", intfID)
 
 }
 
@@ -313,7 +313,7 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC *chan bool) (*GRP
 	if wireDef.LocalPodIp != "" {
 		ipAddr, ipSubnet, err := net.ParseCIDR(wireDef.LocalPodIp)
 		if err != nil {
-			return nil, fmt.Errorf("While creating remote end of GRPC wire(%s@%s), failed to parse CIDR %s: %s",
+			return nil, fmt.Errorf("failed to create remote end of GRPC wire(%s@%s), failed to parse CIDR %s: %w",
 				inIfNm, wireDef.LocalPodNm, wireDef.LocalPodIp, err)
 		}
 		inContainerVeth.IPAddr = []net.IPNet{{
@@ -402,7 +402,7 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 	for {
 		var packet gopacket.Packet
 		select {
-		case <-(wire.StopC):
+		case <-wire.StopC:
 			log.Printf("Receive thread closing connection with peer: %s@%d", wire.PeerPodIP, wire.PeerIntfID)
 			return io.EOF
 		case packet = <-in:
