@@ -295,7 +295,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 		Originator:   grpcwire.HOST_CREATED_WIRE,
 		OriginatorIP: "unknown", /*+++todo retrieve host ip and set it here. Needed only for debugging */
 
-		StopC:     make(chan bool),
+		StopC:     make(chan struct{}),
 		Namespace: wireDef.KubeNs,
 	}
 
