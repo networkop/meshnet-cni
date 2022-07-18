@@ -1,9 +1,9 @@
-//package vxlan
 package grpcwire
 
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"strings"
@@ -20,9 +20,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type IntfIndex struct {
-	currId int64
+type intfIndex struct {
 	mu     sync.Mutex
+	currId int64
 }
 
 /* In a given node a veth-pair connects a pod with the meshnet daemon hosted in the node. This meshnet
@@ -38,9 +38,9 @@ topologies will have unique uid or not. If not, then then using IntfIndex will s
 name unique (when used as in the name). When there are multiple topologies, then each topology will be in different
 namespace. So uid will be unique within the namespace.
 */
-var indexGen IntfIndex
+var indexGen intfIndex
 
-func GetNextIndex() int64 {
+func NextIndex() int64 {
 	indexGen.mu.Lock()
 	defer indexGen.mu.Unlock()
 	indexGen.currId++
@@ -48,13 +48,25 @@ func GetNextIndex() int64 {
 }
 
 /*+++tbf: These constants has no utility other that helping in debugging. These can be removed later. */
+type grpcWireOriginator int
+
+func (g grpcWireOriginator) String() string {
+	switch g {
+	case HOST_CREATED_WIRE:
+		return "host originated"
+	case PEER_CREATED_WIRE:
+		return "peer originated"
+	}
+	return "unknown originator"
+}
+
 const (
-	HOST_CREATED_WIRE = iota
+	HOST_CREATED_WIRE grpcWireOriginator = iota
 	PEER_CREATED_WIRE
 )
 
 type GRPCWire struct {
-	Uid       int    // uid identify a particular link in a topology as per meshnet crd
+	UID       int    // uid identify a particular link in a topology as per meshnet crd
 	Namespace string // K8s namespace this wire belongs to
 
 	/* Node information */
@@ -71,20 +83,62 @@ type GRPCWire struct {
 	PeerIntfID int64  // Peer node interface ID
 	PeerPodIP  string // Peer pod IP
 
-	IsReady       bool   // Is this wire ip.
-	HowCreated    int    // create by local host or create on trigger from remote host. This is for debugging.
-	CreaterHostIP string // IP address of the host created it. This is for debugging.
+	IsReady      bool               // Is this wire ip.
+	Originator   grpcWireOriginator // create by local host or create on trigger from remote host. This is for debugging.
+	OriginatorIP string             // IP address of the host created it. This is for debugging.
 
-	StopC chan bool // the channel to send stop signal to the receive thread.
+	StopC chan struct{} // the channel to send stop signal to the receive thread.
 }
 
-type PodLink struct {
-	netns   string
-	linkuid int
+type linkKey struct {
+	namespace string
+	linkUID   int
 }
-type IdToWireMap struct {
-	allWires map[PodLink]*GRPCWire
-	mu       sync.Mutex
+
+type wireMap struct {
+	mu      sync.Mutex
+	wires   map[linkKey]*GRPCWire
+	handles map[int64]*pcap.Handle
+}
+
+func (w *wireMap) GetWire(namespace string, linkUID int) (*GRPCWire, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	wire, ok := w.wires[linkKey{
+		namespace: namespace,
+		linkUID:   linkUID,
+	}]
+	return wire, ok
+}
+
+func (w *wireMap) GetHandle(key int64) (*pcap.Handle, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	handle, ok := w.handles[key]
+	return handle, ok
+}
+
+func (w *wireMap) Add(wire *GRPCWire, handle *pcap.Handle) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.wires[linkKey{
+		namespace: wire.LocalPodNetNS,
+		linkUID:   wire.UID,
+	}] = wire
+
+	w.handles[wire.LocalNodeIntfID] = handle
+	return nil
+}
+
+func (w *wireMap) Delete(wire *GRPCWire) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	delete(w.wires, linkKey{
+		namespace: wire.LocalPodNetNS,
+		linkUID:   wire.UID,
+	})
+	delete(w.handles, wire.LocalNodeIntfID)
+	return nil
 }
 
 /* A grpc-wire creation (between pod A and pod B) can be triggered by either host hosting pod A, B. They
@@ -93,124 +147,70 @@ type IdToWireMap struct {
  * This map keeps the list of wires which are already crated and must not be recreated, if any second
  * trigger is received. This situation occurs when both the host triggers wire creation almost simultaneously.
  */
-var wiresByUID = IdToWireMap{
-	allWires: make(map[PodLink]*GRPCWire),
-}
-
-type GRPCWireHandleMap struct {
+var wires = &wireMap{
+	wires: map[linkKey]*GRPCWire{},
 	/* Used when a packet is received, then we know the id of the interface to which the packet to be delivered.
 	   This map take interface-id as key and returns the corresponding handle for delivering the packet.
 	   map[interface-id]->handle */
-	allHandles map[int64]*pcap.Handle
-	// mu         sync.Mutex
+	handles: map[int64]*pcap.Handle{},
 }
 
-/*
-  map[host-interface-index]->handle to deliver packets to the container
-*/
-var wireHndlsByIntfIdx GRPCWireHandleMap
+// FindWiresByPod returns a list of wires matching the namespace and pod.
+func GetWiresByPod(namespace string, podName string) ([]*GRPCWire, bool) {
+	wires.mu.Lock()
+	defer wires.mu.Unlock()
+	var rWires []*GRPCWire
 
-//-------------------------------------------------------------------------------------------------
-func GetAllActiveWires(kubeNs string, podNm string) ([]*GRPCWire, bool) {
-
-	wiresByUID.mu.Lock()
-	defer wiresByUID.mu.Unlock()
-	ret := make([]*GRPCWire, 0, 10)
-
-	for _, wire := range wiresByUID.allWires {
-		if (wire.LocalPodNm == podNm) && (wire.Namespace == kubeNs) {
-			ret = append(ret, wire)
+	for _, wire := range wires.wires {
+		if wire.LocalPodNm == podName && wire.Namespace == namespace {
+			rWires = append(rWires, wire)
 		}
 	}
-	return ret, true
+	return rWires, true
 }
 
 //-------------------------------------------------------------------------------------------------
 
-func GetActiveWire(linkuid int, netns string) (*GRPCWire, bool) {
-
-	if wiresByUID.allWires == nil {
-		return nil, false
-		//return &GRPCWire{}, false
-	}
-
-	val, ok := wiresByUID.allWires[PodLink{
-		netns:   netns,
-		linkuid: linkuid}]
-
-	if ok {
-		return val, true
-	}
-
-	return nil, false
+// GetWireByUID returns wire matching the provided namespace and linkUID.
+func GetWireByUID(namespace string, linkUID int) (*GRPCWire, bool) {
+	return wires.GetWire(namespace, linkUID)
 }
 
 //-------------------------------------------------------------------------------------------------
-func AddActiveWire(wire *GRPCWire, handle *pcap.Handle) int {
+func AddWire(wire *GRPCWire, handle *pcap.Handle) int {
 	/* Populate the active wire map and returns the number of currently added active wires. */
-	wiresByUID.mu.Lock()
-	defer wiresByUID.mu.Unlock()
-
-	if wiresByUID.allWires == nil {
-		wiresByUID.allWires = make(map[PodLink]*GRPCWire)
-	}
-
-	if wireHndlsByIntfIdx.allHandles == nil {
-		wireHndlsByIntfIdx.allHandles = make(map[int64]*pcap.Handle)
-	}
 
 	/*+++think: if this ware is already present in the map then it will be overwritten.
 	            It seems to be ok to overwrite. Think more in what situation this may
 				not be the desired behavior and we need to throw an error. */
 	wire.IsReady = true
 
-	wiresByUID.allWires[PodLink{
-		netns:   wire.LocalPodNetNS,
-		linkuid: wire.Uid}] = wire
-
-	wireHndlsByIntfIdx.allHandles[wire.LocalNodeIntfID] = handle
-	return len(wiresByUID.allWires)
+	wires.Add(wire, handle)
+	return len(wires.wires)
 }
 
 //-------------------------------------------------------------------------------------------------
-func RemActiveWireMaps(wire *GRPCWire) int {
+func DeleteWire(wire *GRPCWire) int {
 	/* Cleanup the active wire map and returns the number of currently added active wire. */
-	wiresByUID.mu.Lock()
-	defer wiresByUID.mu.Unlock()
-
-	uid := wire.Uid
-	intfID := wire.LocalNodeIntfID
-	netns := wire.LocalPodNetNS
-
-	if wiresByUID.allWires != nil {
-		delete(wiresByUID.allWires, PodLink{
-			netns:   netns,
-			linkuid: uid})
-	}
-
-	if wireHndlsByIntfIdx.allHandles != nil {
-		delete(wireHndlsByIntfIdx.allHandles, intfID)
-	}
-
-	return len(wiresByUID.allWires)
+	wires.Delete(wire)
+	return len(wires.wires)
 }
 
 //-----------------------------------------------------------------------------------------------------------
 
-func RemWireFrmPod(kubeNs string, podNm string) error {
+func DeleteWiresByPod(namespace string, podName string) error {
 
-	log.Infof("Removing grpc-wire for pod %s in namespace: %s ", podNm, kubeNs)
-	allwires, ok := GetAllActiveWires(kubeNs, podNm)
-	if !ok || len(allwires) == 0 {
-		log.Infof("No grpc-wire for pod %s", podNm)
+	log.Infof("Removing grpc-wire for pod %s:%s", namespace, podName)
+	wires, ok := GetWiresByPod(namespace, podName)
+	if !ok || len(wires) == 0 {
+		log.Infof("No grpc-wire for pod %s:%s", namespace, podName)
 		return nil
 	}
 
 	resp := true
-	var fstErr error = nil
-	for _, w := range allwires {
-		err := RemWire(w)
-		if err != nil {
+	var fstErr error
+	for _, w := range wires {
+		if err := RemoveWire(w); err != nil {
 			log.Infof("Error while removing GRPC wire for  pod: %s@%s. err:%v", w.LocalPodIntfNm, w.LocalPodNm, err)
 			// instead of failing, just log the error and move on
 			resp = false
@@ -225,40 +225,40 @@ func RemWireFrmPod(kubeNs string, podNm string) error {
 	}
 
 	// only reports the first error
-	return fmt.Errorf("Error while removing GRPC wire for pod %s. err:%v", podNm, fstErr)
+	return fmt.Errorf("failed to remove gRPC wire for pod %s: %w", podName, fstErr)
 }
 
 //----------------------------------------------------------------------------------------------------------
-func RemWire(wire *GRPCWire) error {
+func RemoveWire(wire *GRPCWire) error {
 
 	/* stop the packet receive thread for this pod */
-	wire.StopC <- true
+	close(wire.StopC)
 
 	/* Remove the veth from the node */
 	intf, err := net.InterfaceByIndex(int(wire.LocalNodeIntfID))
 	if err != nil {
-		return fmt.Errorf("Could not retrieve interface data for interface index %d, for link %d. err:%v", wire.LocalNodeIntfID, wire.Uid, err)
+		return fmt.Errorf("failed to etrieve interface data for interface index %d, for link %d: %w", wire.LocalNodeIntfID, wire.UID, err)
 	}
 	myVeth := koko.VEth{}
 	myVeth.LinkName = intf.Name
 	if err = myVeth.RemoveVethLink(); err != nil {
-		return fmt.Errorf("Error removing veth link: %s", err)
+		return fmt.Errorf("failed to remove veth link: %w", err)
 	}
 
-	RemActiveWireMaps(wire)
+	DeleteWire(wire)
 
-	log.Infof("Successfully removed grpc wire for link %d.", wire.Uid)
+	log.Infof("Successfully removed grpc wire for link %d.", wire.UID)
 	return nil
 }
 
 //-----------------------------------------------------------------------------------------------------------
 func GetHostIntfHndl(intfID int64) (*pcap.Handle, error) {
 
-	val, ok := wireHndlsByIntfIdx.allHandles[intfID]
+	val, ok := wires.GetHandle(intfID)
 	if ok {
 		return val, nil
 	}
-	return nil, fmt.Errorf("Interface %d is not active.", intfID)
+	return nil, fmt.Errorf("interface %d is not active", intfID)
 
 }
 
@@ -266,27 +266,19 @@ func GetHostIntfHndl(intfID int64) (*pcap.Handle, error) {
 /*
 	When the remote peer tells the local node to creat the local end of the grpc-wire
 */
-func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC *chan bool) (*GRPCWire, error) {
+func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*GRPCWire, error) {
 
 	var err error
 
 	/* If this link already created then do nothing. This can happen due to a race between the local and remote peer.
 	   We will allow only one to complete the creation. */
-	grpcwire, ok := GetActiveWire(int(wireDef.LinkUid), wireDef.LocalPodNetNs)
-	if ok && grpcwire.IsReady {
-		who := ""
-		if grpcwire.HowCreated == HOST_CREATED_WIRE {
-			who = "local host"
-		} else if grpcwire.HowCreated == PEER_CREATED_WIRE {
-			who = "remote peer"
-		} else {
-			who = "unknown host"
-		}
-		log.Infof("This grpc-wire is already created by %s. Local interface id : %d peer interface id : %d", who, grpcwire.LocalNodeIntfID, grpcwire.PeerIntfID)
-		return grpcwire, nil
+	grpcWire, ok := GetWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid))
+	if ok && grpcWire.IsReady {
+		log.Infof("This grpc-wire is already created by %s. Local interface id : %d peer interface id : %d", grpcWire.Originator, grpcWire.LocalNodeIntfID, grpcWire.PeerIntfID)
+		return grpcWire, nil
 	}
 
-	idVeth := GetNextIndex()
+	idVeth := NextIndex()
 	/*Linux has problem if the interface name is too big. (+++todo: add the documentation here) */
 	nmLen1 := len(wireDef.IntfNameInPod)
 	nmLen2 := len(wireDef.LocalPodNm)
@@ -321,7 +313,7 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC *chan bool) (*GRP
 	if wireDef.LocalPodIp != "" {
 		ipAddr, ipSubnet, err := net.ParseCIDR(wireDef.LocalPodIp)
 		if err != nil {
-			return nil, fmt.Errorf("While creating remote end of GRPC wire(%s@%s), failed to parse CIDR %s: %s",
+			return nil, fmt.Errorf("failed to create remote end of GRPC wire(%s@%s), failed to parse CIDR %s: %w",
 				inIfNm, wireDef.LocalPodNm, wireDef.LocalPodIp, err)
 		}
 		inContainerVeth.IPAddr = []net.IPNet{{
@@ -340,8 +332,8 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC *chan bool) (*GRP
 		return nil, err
 	}
 	log.Infof("On Remote Trigger: Successfully created vEth pair (in(name):%s <--> out(name-index):%s:%d).", inIfNm, outIfNm, locInf.Index)
-	aWire := GRPCWire{
-		Uid: int(wireDef.LinkUid),
+	aWire := &GRPCWire{
+		UID: int(wireDef.LinkUid),
 
 		LocalNodeIntfID: int64(locInf.Index),
 		LocalNodeIntfNm: hostEndVeth.LinkName,
@@ -353,11 +345,11 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC *chan bool) (*GRP
 		PeerIntfID: wireDef.PeerIntfId,
 		PeerPodIP:  wireDef.PeerIp,
 
-		IsReady:       true,
-		HowCreated:    PEER_CREATED_WIRE,
-		CreaterHostIP: wireDef.PeerIp,
+		IsReady:      true,
+		Originator:   PEER_CREATED_WIRE,
+		OriginatorIP: wireDef.PeerIp,
 
-		StopC:     *stopC,
+		StopC:     stopC,
 		Namespace: wireDef.KubeNs,
 	}
 	/*+++think: As an alternative to google gopacket(pcap), a socket based implementation is possible.
@@ -368,8 +360,8 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC *chan bool) (*GRP
 		return nil, err
 	}
 
-	AddActiveWire(&aWire, wrHandle)
-	return &aWire, nil
+	AddWire(aWire, wrHandle)
+	return aWire, nil
 }
 
 //-----------------------------------------------------------------------------------------------------------
@@ -403,16 +395,15 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 	defer cancel()
 
 	source := gopacket.NewPacketSource(rdHandl, rdHandl.LinkType())
-
 	wireClient := mpb.NewWireProtocolClient(remote)
 
 	in := source.Packets()
+	var packet gopacket.Packet
 	for {
-		var packet gopacket.Packet
 		select {
-		case <-(wire.StopC):
+		case <-wire.StopC:
 			log.Printf("Receive thread closing connection with peer: %s@%d", wire.PeerPodIP, wire.PeerIntfID)
-			break
+			return io.EOF
 		case packet = <-in:
 			data := packet.Data()
 			payload := &mpb.Packet{

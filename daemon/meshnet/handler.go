@@ -257,8 +257,7 @@ func (m *Meshnet) Update(ctx context.Context, pod *mpb.RemotePod) (*mpb.BoolResp
 //------------------------------------------------------------------------------------------------------
 func (m *Meshnet) RemGRPCWire(ctx context.Context, wireDef *mpb.WireDef) (*mpb.BoolResponse, error) {
 	resp := true
-	err := grpcwire.RemWireFrmPod(wireDef.KubeNs, wireDef.LocalPodNm)
-	if err != nil {
+	if err := grpcwire.DeleteWiresByPod(wireDef.KubeNs, wireDef.LocalPodNm); err != nil {
 		resp = false
 	}
 	return &mpb.BoolResponse{Response: resp}, nil
@@ -281,7 +280,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 	}
 
 	aWire := grpcwire.GRPCWire{
-		Uid: int(wireDef.LinkUid),
+		UID: int(wireDef.LinkUid),
 
 		LocalNodeIntfID: int64(locInf.Index),
 		LocalNodeIntfNm: wireDef.VethNameLocalHost,
@@ -293,15 +292,14 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 		PeerIntfID: wireDef.PeerIntfId,
 		PeerPodIP:  wireDef.PeerIp,
 
-		IsReady:       true,
-		HowCreated:    grpcwire.HOST_CREATED_WIRE,
-		CreaterHostIP: "unknown", /*+++todo retrieve host ip and set it here. Needed only for debugging */
+		Originator:   grpcwire.HOST_CREATED_WIRE,
+		OriginatorIP: "unknown", /*+++todo retrieve host ip and set it here. Needed only for debugging */
 
-		StopC:     make(chan bool),
+		StopC:     make(chan struct{}),
 		Namespace: wireDef.KubeNs,
 	}
 
-	grpcwire.AddActiveWire(&aWire, wrHandle)
+	grpcwire.AddWire(&aWire, wrHandle)
 
 	log.Infof("Starting the local packet receive thread for pod interface %s", wireDef.IntfNameInPod)
 	// TODO: handle error here
@@ -340,11 +338,10 @@ func (m *Meshnet) SendToOnce(ctx context.Context, pkt *mpb.Packet) (*mpb.BoolRes
 }
 
 //---------------------------------------------------------------------------------------------------------------
-
 func (m *Meshnet) AddGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (*mpb.WireCreateResponse, error) {
 
-	stopC := make(chan (bool))
-	wire, err := grpcwire.CreateGRPCWireRemoteTriggered(wireDef, &stopC)
+	stopC := make(chan struct{})
+	wire, err := grpcwire.CreateGRPCWireRemoteTriggered(wireDef, stopC)
 
 	if err == nil {
 		// TODO: handle error here
@@ -358,19 +355,15 @@ func (m *Meshnet) AddGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (
 
 //---------------------------------------------------------------------------------------------------------------
 func (m *Meshnet) GenLocVEthID(ctx context.Context, in *mpb.ReqIntfID) (*mpb.RespIntfID, error) {
-	id := grpcwire.GetNextIndex()
+	id := grpcwire.NextIndex()
 	return &mpb.RespIntfID{Ok: true, LocalIntfId: id}, nil
 }
 
-//---------------------------------------------------------------------------------------------------------------
+// GRPCWireExists will return the wire if it exists.
 func (m *Meshnet) GRPCWireExists(ctx context.Context, wireDef *mpb.WireDef) (*mpb.WireCreateResponse, error) {
-
-	wire, ok := grpcwire.GetActiveWire(int(wireDef.LinkUid), wireDef.LocalPodNetNs)
-
-	if ok && wire != nil {
-		return &mpb.WireCreateResponse{Response: ok, PeerIntfId: (*wire).PeerIntfID}, nil
+	wire, ok := grpcwire.GetWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid))
+	if !ok || wire == nil {
+		return &mpb.WireCreateResponse{Response: false, PeerIntfId: 0}, nil
 	}
-
-	return &mpb.WireCreateResponse{Response: false, PeerIntfId: 0}, nil
-
+	return &mpb.WireCreateResponse{Response: ok, PeerIntfId: wire.PeerIntfID}, nil
 }
