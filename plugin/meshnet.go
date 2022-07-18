@@ -299,6 +299,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				log.Infof("%s@%s and %s@%s are on different hosts", localPod.Name, localPod.SrcIp, peerPod.Name, peerPod.SrcIp)
 				if interNodeLinkType == INTER_NODE_LINK_GRPC {
 					err = CreatGRPCChan(link, localPod, peerPod, &meshnetClient, &cniArgs, &ctx)
+					//err = CreatGRPCChan_new(link, localPod, peerPod, &meshnetClient, &cniArgs, ctx)
 					if err != nil {
 						log.Infof("!! Failed to create grpc wire. err: %v", err)
 						return err
@@ -397,8 +398,8 @@ func cmdDel(args *skel.CmdArgs) error {
 	/* Tell daemon to close the grpc tunnel for this pod netns (if any) */
 	log.Infof("Retrieving pod's metadata from meshnet daemon")
 	wireDef := mpb.WireDef{
-		KubeNs:     string(cniArgs.K8S_POD_NAMESPACE),
-		LocalPodNm: string(cniArgs.K8S_POD_NAME),
+		KubeNs:       string(cniArgs.K8S_POD_NAMESPACE),
+		LocalPodName: string(cniArgs.K8S_POD_NAME),
 	}
 	/*+++todo: Add response handling */
 	_, err = meshnetClient.RemGRPCWire(ctx, &wireDef)

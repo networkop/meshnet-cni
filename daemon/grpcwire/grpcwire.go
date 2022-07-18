@@ -281,7 +281,7 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 	idVeth := NextIndex()
 	/*Linux has problem if the interface name is too big. (+++todo: add the documentation here) */
 	nmLen1 := len(wireDef.IntfNameInPod)
-	nmLen2 := len(wireDef.LocalPodNm)
+	nmLen2 := len(wireDef.LocalPodName)
 	if nmLen1 > 5 { //+++todo : remove hard coding
 		nmLen1 = 5
 	}
@@ -290,7 +290,7 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 	}
 
 	//eth1host1-<index>
-	outIfNm := wireDef.IntfNameInPod[0:nmLen1] + wireDef.LocalPodNm[0:nmLen2] + "-g" + strconv.FormatInt(idVeth, 10)
+	outIfNm := wireDef.IntfNameInPod[0:nmLen1] + wireDef.LocalPodName[0:nmLen2] + "-g" + strconv.FormatInt(idVeth, 10)
 
 	currNs, err := ns.GetCurrentNS()
 	if err != nil {
@@ -314,7 +314,7 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 		ipAddr, ipSubnet, err := net.ParseCIDR(wireDef.LocalPodIp)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create remote end of GRPC wire(%s@%s), failed to parse CIDR %s: %w",
-				inIfNm, wireDef.LocalPodNm, wireDef.LocalPodIp, err)
+				inIfNm, wireDef.LocalPodName, wireDef.LocalPodIp, err)
 		}
 		inContainerVeth.IPAddr = []net.IPNet{{
 			IP:   ipAddr,
@@ -339,7 +339,7 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 		LocalNodeIntfNm: hostEndVeth.LinkName,
 		LocalPodIP:      wireDef.LocalPodIp,
 		LocalPodIntfNm:  wireDef.IntfNameInPod,
-		LocalPodNm:      wireDef.LocalPodNm,
+		LocalPodNm:      wireDef.LocalPodName,
 		LocalPodNetNS:   wireDef.LocalPodNetNs,
 
 		PeerIntfID: wireDef.PeerIntfId,

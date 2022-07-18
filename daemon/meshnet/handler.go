@@ -257,7 +257,7 @@ func (m *Meshnet) Update(ctx context.Context, pod *mpb.RemotePod) (*mpb.BoolResp
 //------------------------------------------------------------------------------------------------------
 func (m *Meshnet) RemGRPCWire(ctx context.Context, wireDef *mpb.WireDef) (*mpb.BoolResponse, error) {
 	resp := true
-	if err := grpcwire.DeleteWiresByPod(wireDef.KubeNs, wireDef.LocalPodNm); err != nil {
+	if err := grpcwire.DeleteWiresByPod(wireDef.KubeNs, wireDef.LocalPodName); err != nil {
 		resp = false
 	}
 	return &mpb.BoolResponse{Response: resp}, nil
@@ -286,7 +286,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 		LocalNodeIntfNm: wireDef.VethNameLocalHost,
 		LocalPodIP:      wireDef.LocalPodIp,
 		LocalPodIntfNm:  wireDef.IntfNameInPod,
-		LocalPodNm:      wireDef.LocalPodNm,
+		LocalPodNm:      wireDef.LocalPodName,
 		LocalPodNetNS:   wireDef.LocalPodNetNs,
 
 		PeerIntfID: wireDef.PeerIntfId,
