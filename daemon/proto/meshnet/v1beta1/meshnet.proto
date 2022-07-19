@@ -50,12 +50,12 @@ message RemotePod {
 // The proto describes both end of a grpc-wire, the local end and the remote
 // end.
 message WireDef {
-  /* The remote machine interface id, to which this wire is connected to.
-    When local machine sends a packet to remote mahcine over grpc-wire,
-    then along with the packet data, local machine also sends the interface id 
-    to whihc this packet needs to delivered in remote machine. It avoid any 
-    per packet interface lookup at the remote end. Packet delivery becomes
-    an O(1) operation at remote end. */
+  // The remote machine interface id, to which this wire is connected to.
+  //  When local machine sends a packet to remote mahcine over grpc-wire,
+  //  then along with the packet data, local machine also sends the interface id 
+  //  to whihc this packet needs to delivered in remote machine. It avoids any 
+  //  per packet interface lookup at the remote end. Packet delivery becomes
+  //  an O(1) operation at remote end.
   int64 peer_intf_id = 1;
 
   // The remote machine interface IP, to which this grpc wire is connected to.
@@ -76,11 +76,10 @@ message WireDef {
   // Name of the local pod where this wire is getting added.
   string local_pod_name = 6;
 
-  /* Every interface in a pod is one end of a veth pair. The other end of
-  the veth pair is with the local node. This is the name of  veth end, which
-  is with the node. Packets coming from the pod will be picked up from this
-  veth end and will be transported to the remote node over grpc wire.
-  */
+  // Every interface insdie a pod is one end of a veth pair. The other end of
+  // the veth pair is with the local node. This is the name of  veth end, which
+  // is with the node. Packets coming from the pod will be picked up from this
+  // veth end and will be transported to the remote node over grpc wire.
   string veth_name_local_host = 7;
 
   string kube_ns = 8;
@@ -91,7 +90,7 @@ message WireDef {
 
 message WireCreateResponse {
   bool response = 1;
-  /* the interface id, which was created.*/
+  // the interface id, that was created.
   int64 peer_intf_id = 2;
 }
 
@@ -99,7 +98,6 @@ message Packet {
   // the remote machine interface id, to which this packet should be delivered. 
   int64 remot_intf_id = 1;   
   bytes frame = 2;
-  int64 frame_len = 3;
 }
 
 message ReqIntfID {
@@ -124,10 +122,9 @@ service Local {
   rpc AddGRPCWireLocal(WireDef) returns (BoolResponse);
   rpc RemGRPCWire(WireDef) returns (BoolResponse);
 
-  /* The node is going to hold multiple veth to connect to multiple containers. 
-  * Each veth name must be different. Daemon generates an ID which is unique in 
-  * this node.
-  */
+  // A node is going to hold multiple veth to connect to multiple containers. 
+  // Each veth name must be unique with in a node. Daemon generates an ID that 
+  // is unique in this node.
   rpc GenLocVEthID(ReqIntfID) returns (RespIntfID);
 }
 

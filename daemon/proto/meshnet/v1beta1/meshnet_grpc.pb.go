@@ -30,9 +30,9 @@ type LocalClient interface {
 	GRPCWireExists(ctx context.Context, in *WireDef, opts ...grpc.CallOption) (*WireCreateResponse, error)
 	AddGRPCWireLocal(ctx context.Context, in *WireDef, opts ...grpc.CallOption) (*BoolResponse, error)
 	RemGRPCWire(ctx context.Context, in *WireDef, opts ...grpc.CallOption) (*BoolResponse, error)
-	// The node is going to hold multiple veth to connect to multiple containers.
-	// Each veth name must be different. Daemon generates an ID which is unique in
-	// this node.
+	// A node is going to hold multiple veth to connect to multiple containers.
+	// Each veth name must be unique with in a node. Daemon generates an ID that
+	// is unique in this node.
 	GenLocVEthID(ctx context.Context, in *ReqIntfID, opts ...grpc.CallOption) (*RespIntfID, error)
 }
 
@@ -137,9 +137,9 @@ type LocalServer interface {
 	GRPCWireExists(context.Context, *WireDef) (*WireCreateResponse, error)
 	AddGRPCWireLocal(context.Context, *WireDef) (*BoolResponse, error)
 	RemGRPCWire(context.Context, *WireDef) (*BoolResponse, error)
-	// The node is going to hold multiple veth to connect to multiple containers.
-	// Each veth name must be different. Daemon generates an ID which is unique in
-	// this node.
+	// A node is going to hold multiple veth to connect to multiple containers.
+	// Each veth name must be unique with in a node. Daemon generates an ID that
+	// is unique in this node.
 	GenLocVEthID(context.Context, *ReqIntfID) (*RespIntfID, error)
 	mustEmbedUnimplementedLocalServer()
 }

@@ -409,7 +409,6 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 			payload := &mpb.Packet{
 				RemotIntfId: wire.PeerIntfID,
 				Frame:       data,
-				FrameLen:    int64(len(data)),
 			}
 
 			/*+++TODO: Ethernet has a minimum frame size of 64 bytes, comprising an 18-byte header and a payload of 46 bytes.
@@ -417,9 +416,9 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 			This logic needs to be better, take the interface MTU not hardcoded value of 1518.
 			This is a very unusual condition to receive an packet from the pod with size > MTU. This can only happens if
 			things gets really messed up.   */
-			if payload.FrameLen > 1518 {
+			if len(data) > 1518 {
 				pktType := DecodePkt(payload.Frame)
-				log.Infof("Daemon(RecvFrmLocalPodThread): Dropping:unusually large packet received from local pod. size: %d, pkt:%s", payload.FrameLen, pktType)
+				log.Infof("Daemon(RecvFrmLocalPodThread): Dropping:unusually large packet received from local pod. size: %d, pkt:%s", len(data), pktType)
 			}
 			ok, err := (wireClient).SendToOnce(ctx, payload)
 			if err != nil || !ok.Response {

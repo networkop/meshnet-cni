@@ -313,25 +313,19 @@ func (m *Meshnet) SendToOnce(ctx context.Context, pkt *mpb.Packet) (*mpb.BoolRes
 
 	wrHandle, err := grpcwire.GetHostIntfHndl(pkt.RemotIntfId)
 	if err != nil {
-		log.Printf("Daemon-Service-SendToOnce (wire id - %v): Could not find local handle. err:%v", pkt.RemotIntfId, err)
+		log.Printf("SendToOnce (wire id - %v): Could not find local handle. err:%v", pkt.RemotIntfId, err)
 		return &mpb.BoolResponse{Response: false}, err
 	}
 
 	// In case any per packet log need to be generated.
-	//pktType := grpcwire.DecodePkt(pkt.Frame)
-	//log.Printf("Daemon(SendToOnce): Received [pkt: %s, bytes: %d, for local interface id: %d]. Sending it to local container", pktType, pkt.FrameLen, pkt.RemotIntfId)
-	log.Printf("Daemon(SendToOnce): Received [bytes: %d, for local interface id: %d]. Sending it to local container", pkt.FrameLen, pkt.RemotIntfId)
+	// pktType := grpcwire.DecodePkt(pkt.Frame)
+	// log.Printf("Daemon(SendToOnce): Received [pkt: %s, bytes: %d, for local interface id: %d]. Sending it to local container", pktType, len(pkt.Frame), pkt.RemotIntfId)
+	// log.Printf("Daemon(SendToOnce): Received [bytes: %d, for local interface id: %d]. Sending it to local container", len(pkt.Frame), pkt.RemotIntfId)
 
-	if pkt.FrameLen <= 1518 {
-		err = wrHandle.WritePacketData(pkt.Frame)
-		if err != nil {
-			log.Printf("Daemon-Service-SendToOnce (wire id - %v): Could not write packet(%d bytes) to local interface. err:%v", pkt.RemotIntfId, pkt.FrameLen, err)
-			return &mpb.BoolResponse{Response: false}, err
-		}
-	} else {
-		// WE should never reach here
-		log.Printf("Daemon-Service-SendToOnce (wire id - %v): Received unusually large size packet(%d bytes) from peer. Not delivering it to local pod", pkt.RemotIntfId, pkt.FrameLen)
-
+	err = wrHandle.WritePacketData(pkt.Frame)
+	if err != nil {
+		log.Printf("SendToOnce (wire id - %v): Could not write packet(%d bytes) to local interface. err:%v", pkt.RemotIntfId, len(pkt.Frame), err)
+		return &mpb.BoolResponse{Response: false}, err
 	}
 
 	return &mpb.BoolResponse{Response: true}, nil
