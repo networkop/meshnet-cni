@@ -420,7 +420,7 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 				pktType := DecodePkt(payload.Frame)
 				log.Infof("Daemon(RecvFrmLocalPodThread): Dropping:unusually large packet received from local pod. size: %d, pkt:%s", len(data), pktType)
 			}
-			ok, err := (wireClient).SendToOnce(ctx, payload)
+			ok, err := wireClient.SendToOnce(ctx, payload)
 			if err != nil || !ok.Response {
 				if err != nil {
 					log.Infof("Daemon(RecvFrmLocalPodThread): Failed to send packet to remote. err=%v", err)
