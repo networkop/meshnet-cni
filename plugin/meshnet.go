@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"runtime"
-	"strings"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -88,11 +87,22 @@ func getVxlanSource(nodeIP string) (string, string, error) {
 	if nodeIP == "" {
 		return "", "", fmt.Errorf("meshnetd provided no HOST_IP address: %s", nodeIP)
 	}
+	nIP := net.ParseIP(nodeIP)
+	if nIP == nil {
+		return "", "", fmt.Errorf("parsing filed for meshnetd provided no HOST_IP address: %s", nodeIP)
+	}
 	ifaces, _ := net.Interfaces()
 	for _, i := range ifaces {
 		addrs, _ := i.Addrs()
 		for _, a := range addrs {
-			if strings.Contains(a.String(), nodeIP) {
+			var ip net.IP
+			switch v := a.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if nIP.Equal(ip) {
 				log.Infof("Found iface %s for address %s", i.Name, nodeIP)
 				return nodeIP, i.Name, nil
 			}

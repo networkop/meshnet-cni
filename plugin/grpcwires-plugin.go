@@ -164,7 +164,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 	}
 
 	log.Infof("Create GRPC wire: dialing remote node-->%s@%s", peerPod.Name, url)
-	creatResp, err := (remoteClient).AddGRPCWireRemote(*ctx, &wireDefRemot)
+	creatResp, err := remoteClient.AddGRPCWireRemote(*ctx, &wireDefRemot)
 	if err != nil {
 		return fmt.Errorf("failed to create grpc tunnel ar remote end:%s  err:%v", url, err)
 	} else if !creatResp.Response {
@@ -368,7 +368,7 @@ func CreatGRPCChan_new(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, loca
 	}
 
 	log.Infof("Create GRPC wire: dialing remote node-->%s@%s", peerPod.Name, url)
-	creatResp, err := (remoteClient).AddGRPCWireRemote(ctx, &wireDefRemot)
+	creatResp, err := remoteClient.AddGRPCWireRemote(ctx, &wireDefRemot)
 	if err != nil {
 		return fmt.Errorf("failed to create grpc tunnel ar remote end:%s  err:%v", url, err)
 	} else if !creatResp.Response {

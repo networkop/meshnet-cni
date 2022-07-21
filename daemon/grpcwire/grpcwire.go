@@ -70,18 +70,18 @@ type GRPCWire struct {
 	Namespace string // K8s namespace this wire belongs to
 
 	/* Node information */
-	LocalNodeIntfID int64  // OS assigned interface ID of local node interface
-	LocalNodeIntfNm string // name of local node interface
+	LocalNodeIfaceID   int64  // OS assigned interface ID of local node interface
+	LocalNodeIfaceName string // name of local node interface
 
 	/* Pod information : where this wire is terminating in this node */
-	LocalPodIP     string // IP address of the local container who will consume packets over this wire. This is for debugging. This is generally not available when links are getting created and is not necessary also.
-	LocalPodNm     string // Name the local pod who will consume packets over this wire.
-	LocalPodIntfNm string // Name the interface which is inside the local pod who will consume packets over this wire. This is for debugging
-	LocalPodNetNS  string
+	LocalPodIP        string // IP address of the local container who will consume packets over this wire. This is for debugging. This is generally not available when links are getting created and is not necessary also.
+	LocalPodName      string // Name the local pod who will consume packets over this wire.
+	LocalPodIfaceName string // Name the interface which is inside the local pod who will consume packets over this wire. This is for debugging
+	LocalPodNetNS     string
 
 	/*Peer pod information*/
-	PeerIntfID int64  // Peer node interface ID
-	PeerPodIP  string // Peer pod IP
+	PeerIfaceID int64  // Peer node interface ID
+	PeerPodIP   string // Peer pod IP
 
 	IsReady      bool               // Is this wire ip.
 	Originator   grpcWireOriginator // create by local host or create on trigger from remote host. This is for debugging.
@@ -126,7 +126,7 @@ func (w *wireMap) Add(wire *GRPCWire, handle *pcap.Handle) error {
 		linkUID:   wire.UID,
 	}] = wire
 
-	w.handles[wire.LocalNodeIntfID] = handle
+	w.handles[wire.LocalNodeIfaceID] = handle
 	return nil
 }
 
@@ -137,7 +137,7 @@ func (w *wireMap) Delete(wire *GRPCWire) error {
 		namespace: wire.LocalPodNetNS,
 		linkUID:   wire.UID,
 	})
-	delete(w.handles, wire.LocalNodeIntfID)
+	delete(w.handles, wire.LocalNodeIfaceID)
 	return nil
 }
 
@@ -162,7 +162,7 @@ func GetWiresByPod(namespace string, podName string) ([]*GRPCWire, bool) {
 	var rWires []*GRPCWire
 
 	for _, wire := range wires.wires {
-		if wire.LocalPodNm == podName && wire.Namespace == namespace {
+		if wire.LocalPodName == podName && wire.Namespace == namespace {
 			rWires = append(rWires, wire)
 		}
 	}
@@ -211,7 +211,7 @@ func DeleteWiresByPod(namespace string, podName string) error {
 	var fstErr error
 	for _, w := range wires {
 		if err := RemoveWire(w); err != nil {
-			log.Infof("Error while removing GRPC wire for  pod: %s@%s. err:%v", w.LocalPodIntfNm, w.LocalPodNm, err)
+			log.Infof("Error while removing GRPC wire for  pod: %s@%s. err:%v", w.LocalPodIfaceName, w.LocalPodName, err)
 			// instead of failing, just log the error and move on
 			resp = false
 			if fstErr == nil {
@@ -220,7 +220,7 @@ func DeleteWiresByPod(namespace string, podName string) error {
 			}
 		}
 		if resp {
-			log.Infof("Removed all grpc-wire for pod: %s@%s", w.LocalPodIntfNm, w.LocalPodNm)
+			log.Infof("Removed all grpc-wire for pod: %s@%s", w.LocalPodIfaceName, w.LocalPodName)
 		}
 	}
 
@@ -235,9 +235,9 @@ func RemoveWire(wire *GRPCWire) error {
 	close(wire.StopC)
 
 	/* Remove the veth from the node */
-	intf, err := net.InterfaceByIndex(int(wire.LocalNodeIntfID))
+	intf, err := net.InterfaceByIndex(int(wire.LocalNodeIfaceID))
 	if err != nil {
-		return fmt.Errorf("failed to etrieve interface data for interface index %d, for link %d: %w", wire.LocalNodeIntfID, wire.UID, err)
+		return fmt.Errorf("failed to etrieve interface data for interface index %d, for link %d: %w", wire.LocalNodeIfaceID, wire.UID, err)
 	}
 	myVeth := koko.VEth{}
 	myVeth.LinkName = intf.Name
@@ -274,7 +274,7 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 	   We will allow only one to complete the creation. */
 	grpcWire, ok := GetWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid))
 	if ok && grpcWire.IsReady {
-		log.Infof("This grpc-wire is already created by %s. Local interface id : %d peer interface id : %d", grpcWire.Originator, grpcWire.LocalNodeIntfID, grpcWire.PeerIntfID)
+		log.Infof("This grpc-wire is already created by %s. Local interface id : %d peer interface id : %d", grpcWire.Originator, grpcWire.LocalNodeIfaceID, grpcWire.PeerIfaceID)
 		return grpcWire, nil
 	}
 
@@ -335,15 +335,15 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 	aWire := &GRPCWire{
 		UID: int(wireDef.LinkUid),
 
-		LocalNodeIntfID: int64(locInf.Index),
-		LocalNodeIntfNm: hostEndVeth.LinkName,
-		LocalPodIP:      wireDef.LocalPodIp,
-		LocalPodIntfNm:  wireDef.IntfNameInPod,
-		LocalPodNm:      wireDef.LocalPodName,
-		LocalPodNetNS:   wireDef.LocalPodNetNs,
+		LocalNodeIfaceID:   int64(locInf.Index),
+		LocalNodeIfaceName: hostEndVeth.LinkName,
+		LocalPodIP:         wireDef.LocalPodIp,
+		LocalPodIfaceName:  wireDef.IntfNameInPod,
+		LocalPodName:       wireDef.LocalPodName,
+		LocalPodNetNS:      wireDef.LocalPodNetNs,
 
-		PeerIntfID: wireDef.PeerIntfId,
-		PeerPodIP:  wireDef.PeerIp,
+		PeerIfaceID: wireDef.PeerIntfId,
+		PeerPodIP:   wireDef.PeerIp,
 
 		IsReady:      true,
 		Originator:   PEER_CREATED_WIRE,
@@ -371,16 +371,16 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 	pktBuffSz := int32(1024 * 64)
 
 	url := strings.TrimSpace(fmt.Sprintf("%s:%s", wire.PeerPodIP, defaultPort))
-	rdHandl, err := pcap.OpenLive(wire.LocalNodeIntfNm, pktBuffSz, true, pcap.BlockForever)
+	rdHandl, err := pcap.OpenLive(wire.LocalNodeIfaceName, pktBuffSz, true, pcap.BlockForever)
 	if err != nil {
-		log.Fatalf("Receive Thread for local pod failed to open interface: %s, PCAP ERROR: %v", wire.LocalNodeIntfNm, err)
+		log.Fatalf("Receive Thread for local pod failed to open interface: %s, PCAP ERROR: %v", wire.LocalNodeIfaceName, err)
 		return err
 	}
 	defer rdHandl.Close()
 
 	err = rdHandl.SetDirection(pcap.Direction(pcap.DirectionIn))
 	if err != nil {
-		log.Fatalf("Receive Thread for local pod failed to set up capture direction: %s, PCAP ERROR: %v", wire.LocalNodeIntfNm, err)
+		log.Fatalf("Receive Thread for local pod failed to set up capture direction: %s, PCAP ERROR: %v", wire.LocalNodeIfaceName, err)
 		return err
 	}
 
@@ -402,12 +402,12 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 	for {
 		select {
 		case <-wire.StopC:
-			log.Printf("Receive thread closing connection with peer: %s@%d", wire.PeerPodIP, wire.PeerIntfID)
+			log.Printf("Receive thread closing connection with peer: %s@%d", wire.PeerPodIP, wire.PeerIfaceID)
 			return io.EOF
 		case packet = <-in:
 			data := packet.Data()
 			payload := &mpb.Packet{
-				RemotIntfId: wire.PeerIntfID,
+				RemotIntfId: wire.PeerIfaceID,
 				Frame:       data,
 			}
 
