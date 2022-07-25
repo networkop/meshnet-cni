@@ -326,16 +326,16 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 		log.Infof("Error creating vEth pair (in:%s <--> out:%s).  Error-> %s", inIfNm, outIfNm, err)
 		return nil, err
 	}
-	locInf, err := net.InterfaceByName(hostEndVeth.LinkName)
+	locIface, err := net.InterfaceByName(hostEndVeth.LinkName)
 	if err != nil {
 		log.Fatalf("Could not get interface index for %s. error:%v", hostEndVeth.LinkName, err)
 		return nil, err
 	}
-	log.Infof("On Remote Trigger: Successfully created vEth pair (in(name):%s <--> out(name-index):%s:%d).", inIfNm, outIfNm, locInf.Index)
+	log.Infof("On Remote Trigger: Successfully created vEth pair (in(name):%s <--> out(name-index):%s:%d).", inIfNm, outIfNm, locIface.Index)
 	aWire := &GRPCWire{
 		UID: int(wireDef.LinkUid),
 
-		LocalNodeIfaceID:   int64(locInf.Index),
+		LocalNodeIfaceID:   int64(locIface.Index),
 		LocalNodeIfaceName: hostEndVeth.LinkName,
 		LocalPodIP:         wireDef.LocalPodIp,
 		LocalPodIfaceName:  wireDef.IntfNameInPod,
