@@ -282,15 +282,15 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 	aWire := grpcwire.GRPCWire{
 		UID: int(wireDef.LinkUid),
 
-		LocalNodeIntfID: int64(locInf.Index),
-		LocalNodeIntfNm: wireDef.VethNameLocalHost,
-		LocalPodIP:      wireDef.LocalPodIp,
-		LocalPodIntfNm:  wireDef.IntfNameInPod,
-		LocalPodNm:      wireDef.LocalPodName,
-		LocalPodNetNS:   wireDef.LocalPodNetNs,
+		LocalNodeIfaceID:   int64(locInf.Index),
+		LocalNodeIfaceName: wireDef.VethNameLocalHost,
+		LocalPodIP:         wireDef.LocalPodIp,
+		LocalPodIfaceName:  wireDef.IntfNameInPod,
+		LocalPodName:       wireDef.LocalPodName,
+		LocalPodNetNS:      wireDef.LocalPodNetNs,
 
-		PeerIntfID: wireDef.PeerIntfId,
-		PeerPodIP:  wireDef.PeerIp,
+		PeerIfaceID: wireDef.PeerIntfId,
+		PeerPodIP:   wireDef.PeerIp,
 
 		Originator:   grpcwire.HOST_CREATED_WIRE,
 		OriginatorIP: "unknown", /*+++todo retrieve host ip and set it here. Needed only for debugging */
@@ -341,10 +341,10 @@ func (m *Meshnet) AddGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (
 		// TODO: handle error here
 		go grpcwire.RecvFrmLocalPodThread(wire)
 
-		return &mpb.WireCreateResponse{Response: true, PeerIntfId: wire.LocalNodeIntfID}, nil
+		return &mpb.WireCreateResponse{Response: true, PeerIntfId: wire.LocalNodeIfaceID}, nil
 	}
 	log.Errorf("AddWireRemote err : %v", err)
-	return &mpb.WireCreateResponse{Response: false, PeerIntfId: wire.LocalNodeIntfID}, err
+	return &mpb.WireCreateResponse{Response: false, PeerIntfId: wire.LocalNodeIfaceID}, err
 }
 
 //---------------------------------------------------------------------------------------------------------------
@@ -359,5 +359,5 @@ func (m *Meshnet) GRPCWireExists(ctx context.Context, wireDef *mpb.WireDef) (*mp
 	if !ok || wire == nil {
 		return &mpb.WireCreateResponse{Response: false, PeerIntfId: 0}, nil
 	}
-	return &mpb.WireCreateResponse{Response: ok, PeerIntfId: wire.PeerIntfID}, nil
+	return &mpb.WireCreateResponse{Response: ok, PeerIntfId: wire.PeerIfaceID}, nil
 }
