@@ -89,7 +89,7 @@ func getVxlanSource(nodeIP string) (string, string, error) {
 	}
 	nIP := net.ParseIP(nodeIP)
 	if nIP == nil {
-		return "", "", fmt.Errorf("parsing filed for meshnetd provided no HOST_IP address: %s", nodeIP)
+		return "", "", fmt.Errorf("parsing failed for meshnetd provided no HOST_IP address: %s", nodeIP)
 	}
 	ifaces, _ := net.Interfaces()
 	for _, i := range ifaces {
