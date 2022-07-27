@@ -33,7 +33,8 @@ type LocalClient interface {
 	// A node is going to hold multiple veth to connect to multiple containers.
 	// Each veth name must be unique with in a node. Daemon generates an ID that
 	// is unique in this node.
-	GenLocVEthID(ctx context.Context, in *ReqIntfID, opts ...grpc.CallOption) (*RespIntfID, error)
+	//rpc GenLocVEthID(ReqIntfID) returns (RespIntfID);
+	GenNodeIntfName(ctx context.Context, in *ReqNodeIntfName, opts ...grpc.CallOption) (*RespNodeIntfName, error)
 }
 
 type localClient struct {
@@ -116,9 +117,9 @@ func (c *localClient) RemGRPCWire(ctx context.Context, in *WireDef, opts ...grpc
 	return out, nil
 }
 
-func (c *localClient) GenLocVEthID(ctx context.Context, in *ReqIntfID, opts ...grpc.CallOption) (*RespIntfID, error) {
-	out := new(RespIntfID)
-	err := c.cc.Invoke(ctx, "/meshnet.v1beta1.Local/GenLocVEthID", in, out, opts...)
+func (c *localClient) GenNodeIntfName(ctx context.Context, in *ReqNodeIntfName, opts ...grpc.CallOption) (*RespNodeIntfName, error) {
+	out := new(RespNodeIntfName)
+	err := c.cc.Invoke(ctx, "/meshnet.v1beta1.Local/GenNodeIntfName", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +141,8 @@ type LocalServer interface {
 	// A node is going to hold multiple veth to connect to multiple containers.
 	// Each veth name must be unique with in a node. Daemon generates an ID that
 	// is unique in this node.
-	GenLocVEthID(context.Context, *ReqIntfID) (*RespIntfID, error)
+	//rpc GenLocVEthID(ReqIntfID) returns (RespIntfID);
+	GenNodeIntfName(context.Context, *ReqNodeIntfName) (*RespNodeIntfName, error)
 	mustEmbedUnimplementedLocalServer()
 }
 
@@ -172,8 +174,8 @@ func (UnimplementedLocalServer) AddGRPCWireLocal(context.Context, *WireDef) (*Bo
 func (UnimplementedLocalServer) RemGRPCWire(context.Context, *WireDef) (*BoolResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemGRPCWire not implemented")
 }
-func (UnimplementedLocalServer) GenLocVEthID(context.Context, *ReqIntfID) (*RespIntfID, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GenLocVEthID not implemented")
+func (UnimplementedLocalServer) GenNodeIntfName(context.Context, *ReqNodeIntfName) (*RespNodeIntfName, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GenNodeIntfName not implemented")
 }
 func (UnimplementedLocalServer) mustEmbedUnimplementedLocalServer() {}
 
@@ -332,20 +334,20 @@ func _Local_RemGRPCWire_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Local_GenLocVEthID_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReqIntfID)
+func _Local_GenNodeIntfName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReqNodeIntfName)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(LocalServer).GenLocVEthID(ctx, in)
+		return srv.(LocalServer).GenNodeIntfName(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/meshnet.v1beta1.Local/GenLocVEthID",
+		FullMethod: "/meshnet.v1beta1.Local/GenNodeIntfName",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LocalServer).GenLocVEthID(ctx, req.(*ReqIntfID))
+		return srv.(LocalServer).GenNodeIntfName(ctx, req.(*ReqNodeIntfName))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -390,8 +392,8 @@ var Local_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Local_RemGRPCWire_Handler,
 		},
 		{
-			MethodName: "GenLocVEthID",
-			Handler:    _Local_GenLocVEthID_Handler,
+			MethodName: "GenNodeIntfName",
+			Handler:    _Local_GenNodeIntfName_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
