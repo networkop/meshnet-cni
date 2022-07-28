@@ -263,9 +263,6 @@ func GenNodeIfaceName(podName string, podIfaceName string) (string, error) {
 	// (assuming it includes a trailing null). IFNAMSIZ is used in defining struct net_device's name.
 	// The name must not contain / or any whitespace characters
 	//
-	// nameSegLen := 5
-	// maxNameLen := 14 // 14 char max for a interface name.
-
 	//TODO: This method needs to be robust. It monotonically increases the index and never
 	//      decreases it, even if the interfaces are deleted. So far this will work for accumulated
 	//      1K interfaces per node under the current naming scheme. This is too small.
@@ -274,22 +271,8 @@ func GenNodeIfaceName(podName string, podIfaceName string) (string, error) {
 	//      This reduces the readability and corelation between the “pod-interface” and corresponding
 	//      “node-interface”, for example eth1host1-<3-digit-index> will become "12345678901234".
 	id := NextIndex()
-	// nmLen1 := len(podIfaceName)
-	// nmLen2 := len(podName)
-	// if nmLen1 > nameSegLen {
-	// 	nmLen1 = nameSegLen
-	// }
-	// if nmLen2 > nameSegLen {
-	// 	nmLen2 = nameSegLen
-	// }
 
-	//eth1host1-<index>
-	//ifaceName := podIfaceName[0:nmLen1] + podName[0:nmLen2] + "-" + strconv.FormatInt(id, 10)
 	ifaceName := fmt.Sprintf("%.5s%.5s-%04d", podName, podIfaceName, id)
-	// if len(ifaceName) > maxNameLen {
-	// 	log.Errorf("Interface name %s, is more that %d characters.", ifaceName, maxNameLen)
-	// 	return "", fmt.Errorf("Interface name %s, is more that %d characters.", ifaceName, maxNameLen)
-	// }
 
 	return ifaceName, nil
 }
