@@ -308,8 +308,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			} else { // This means we're on different hosts
 				log.Infof("%s@%s and %s@%s are on different hosts", localPod.Name, localPod.SrcIp, peerPod.Name, peerPod.SrcIp)
 				if interNodeLinkType == INTER_NODE_LINK_GRPC {
-					err = CreatGRPCChan(link, localPod, peerPod, &meshnetClient, &cniArgs, &ctx)
-					//err = CreatGRPCChan_new(link, localPod, peerPod, &meshnetClient, &cniArgs, ctx)
+					err = CreatGRPCChan(link, localPod, peerPod, meshnetClient, &cniArgs, ctx)
 					if err != nil {
 						log.Infof("!! Failed to create grpc wire. err: %v", err)
 						return err

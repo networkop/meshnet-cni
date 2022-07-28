@@ -348,11 +348,6 @@ func (m *Meshnet) AddGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (
 }
 
 //---------------------------------------------------------------------------------------------------------------
-func (m *Meshnet) GenLocVEthID(ctx context.Context, in *mpb.ReqIntfID) (*mpb.RespIntfID, error) {
-	id := grpcwire.NextIndex()
-	return &mpb.RespIntfID{Ok: true, LocalIntfId: id}, nil
-}
-
 // GRPCWireExists will return the wire if it exists.
 func (m *Meshnet) GRPCWireExists(ctx context.Context, wireDef *mpb.WireDef) (*mpb.WireCreateResponse, error) {
 	wire, ok := grpcwire.GetWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid))
@@ -360,4 +355,15 @@ func (m *Meshnet) GRPCWireExists(ctx context.Context, wireDef *mpb.WireDef) (*mp
 		return &mpb.WireCreateResponse{Response: false, PeerIntfId: 0}, nil
 	}
 	return &mpb.WireCreateResponse{Response: ok, PeerIntfId: wire.PeerIfaceID}, nil
+}
+
+//---------------------------------------------------------------------------------------------------------------
+// Given the pod name and the pod interface, GenNodeIntfName generates the corresponding interface name in the node.
+// This pod interface and the node interface later become the two end of a veth-pair
+func (m *Meshnet) GenNodeIntfName(ctx context.Context, in *mpb.ReqNodeIntfName) (*mpb.RespNodeIntfName, error) {
+	locIfNm, err := grpcwire.GenNodeIfaceName(in.PodName, in.PodIntfName)
+	if err != nil {
+		return &mpb.RespNodeIntfName{Ok: false, NodeIntfName: ""}, err
+	}
+	return &mpb.RespNodeIntfName{Ok: true, NodeIntfName: locIfNm}, nil
 }

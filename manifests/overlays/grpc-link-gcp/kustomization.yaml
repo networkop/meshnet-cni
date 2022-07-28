@@ -15,6 +15,16 @@ kind: Kustomization
         # value: VXLAN
         # value: VXLAN
         # value: VXLAN
+        # value: VXLAN
+        # value: VXLAN
+        # value: VXLAN
+        # value: VXLAN
+        # value: VXLAN
+        # value: VXLAN
+        # value: VXLAN
+        # value: VXLAN
+        # value: VXLAN
+        # value: VXLAN
 patches:
 - patch: |-
     - op: replace
@@ -32,4 +42,4 @@ resources:
 images:
 - name: networkop/meshnet
   newName: gcr.io/kt-nts-athena-dev/networkop/meshnet
-  newTag: eb87721-dirty
+  newTag: 1cb604d-dirty

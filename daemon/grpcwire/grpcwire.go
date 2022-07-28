@@ -31,12 +31,6 @@ end of the veth-pair must have unique name with in the node. A node can have mul
 will be multiple veth-pairs for connecting multiple nodes to meshnet daemon and each of them (the node end) must have unique
 names. IntfIndex provides the sequentially increasing number which makes the name unique when added as
 suffix to the name.
-
-+++tbd(explore it more) :The reason we can't use meshnet link uid, as uid unique in a topology. What happens when multiple
-topologies are running in the same cluster ?  I am not sure in that case all the link across multiple
-topologies will have unique uid or not. If not, then then using IntfIndex will still make the interface
-name unique (when used as in the name). When there are multiple topologies, then each topology will be in different
-namespace. So uid will be unique within the namespace.
 */
 var indexGen intfIndex
 
@@ -180,9 +174,9 @@ func GetWireByUID(namespace string, linkUID int) (*GRPCWire, bool) {
 func AddWire(wire *GRPCWire, handle *pcap.Handle) int {
 	/* Populate the active wire map and returns the number of currently added active wires. */
 
-	/*+++think: if this ware is already present in the map then it will be overwritten.
-	            It seems to be ok to overwrite. Think more in what situation this may
-				not be the desired behavior and we need to throw an error. */
+	/* if this ware is already present in the map then it will be overwritten.
+	   It seems to be ok to overwrite. Think more in what situation this may
+	   not be the desired behavior and we need to throw an error. */
 	wire.IsReady = true
 
 	wires.Add(wire, handle)
@@ -190,8 +184,8 @@ func AddWire(wire *GRPCWire, handle *pcap.Handle) int {
 }
 
 //-------------------------------------------------------------------------------------------------
+// DeleteWire cleans up the active wire map and returns the number of currently added active wire.
 func DeleteWire(wire *GRPCWire) int {
-	/* Cleanup the active wire map and returns the number of currently added active wire. */
 	wires.Delete(wire)
 	return len(wires.wires)
 }
@@ -263,9 +257,45 @@ func GetHostIntfHndl(intfID int64) (*pcap.Handle, error) {
 }
 
 //-----------------------------------------------------------------------------------------------------------
-/*
-	When the remote peer tells the local node to creat the local end of the grpc-wire
-*/
+// Generate the name of the interface to be placed on the node
+func GenNodeIfaceName(podName string, podIfaceName string) (string, error) {
+	// Linux has issue if interface name is too long. Generate a smaller name.
+	// In recent kernel versions this is defined by IFNAMSIZ to be 16 bytes, so 15 user-visible bytes
+	// (assuming it includes a trailing null). IFNAMSIZ is used in defining struct net_device's name.
+	// The name must not contain / or any whitespace characters
+	//
+	nameSegLen := 5
+	maxNameLen := 14 // 14 char max for a interface name.
+
+	//TODO: This method needs to be robust. It monotonically increases the index and never
+	//      decreases it, even if the interfaces are deleted. So far this will work for accumulated
+	//      1K interfaces per node under the current naming scheme. This is too small.
+	//      Using 14 digit random number and checking if any interface with generated name exists and if
+	//      exists then generate another random number (try 3 times before giving up). This will make it robust.
+	//      This reduces the readability and corelation between the “pod-interface” and corresponding
+	//      “node-interface”, for example eth1host1-<3-digit-index> will become "12345678901234".
+	id := NextIndex()
+	nmLen1 := len(podIfaceName)
+	nmLen2 := len(podName)
+	if nmLen1 > nameSegLen {
+		nmLen1 = nameSegLen
+	}
+	if nmLen2 > nameSegLen {
+		nmLen2 = nameSegLen
+	}
+
+	//eth1host1-<index>
+	ifaceName := podIfaceName[0:nmLen1] + podName[0:nmLen2] + "-" + strconv.FormatInt(id, 10)
+	if len(ifaceName) > maxNameLen {
+		log.Errorf("Interface name %s, is more that %d characters.", ifaceName, maxNameLen)
+		return "", fmt.Errorf("Interface name %s, is more that %d characters.", ifaceName, maxNameLen)
+	}
+
+	return ifaceName, nil
+}
+
+//-----------------------------------------------------------------------------------------------------------
+//When the remote peer tells the local node to create the local end of the grpc-wire
 func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*GRPCWire, error) {
 
 	var err error
@@ -278,25 +308,15 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 		return grpcWire, nil
 	}
 
-	idVeth := NextIndex()
-	/*Linux has problem if the interface name is too big. (+++todo: add the documentation here) */
-	nmLen1 := len(wireDef.IntfNameInPod)
-	nmLen2 := len(wireDef.LocalPodName)
-	if nmLen1 > 5 { //+++todo : remove hard coding
-		nmLen1 = 5
+	outIfNm, err := GenNodeIfaceName(wireDef.LocalPodName, wireDef.IntfNameInPod)
+	if err != nil {
+		return nil, fmt.Errorf("could not get current network namespace: %v", err)
 	}
-	if nmLen2 > 5 {
-		nmLen2 = 5
-	}
-
-	//eth1host1-<index>
-	outIfNm := wireDef.IntfNameInPod[0:nmLen1] + wireDef.LocalPodName[0:nmLen2] + "-g" + strconv.FormatInt(idVeth, 10)
 
 	currNs, err := ns.GetCurrentNS()
 	if err != nil {
 		return nil, fmt.Errorf("could not get current network namespace: %v", err)
 	}
-	/*+++todo : add error handling */
 
 	/* Create the veth to connect the pod with the meshnet daemon running on the node */
 	hostEndVeth := koko.VEth{
@@ -352,8 +372,10 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 		StopC:     stopC,
 		Namespace: wireDef.KubeNs,
 	}
-	/*+++think: As an alternative to google gopacket(pcap), a socket based implementation is possible.
-	  Not sure if socket based implementation can bring any advantage or not */
+	/* Utilizing google gopacket for polling for packets from the node. This seems to be the
+	   simplest way to get all packets.
+	   As an alternative to google gopacket(pcap), a socket based implementation is possible.
+	   Not sure if socket based implementation can bring any advantage or not.  */
 	wrHandle, err := pcap.OpenLive(hostEndVeth.LinkName, 65365, true, pcap.BlockForever)
 	if err != nil {
 		log.Fatalf("Could not open interface for sed/recv packets for containers. error:%v", err)
