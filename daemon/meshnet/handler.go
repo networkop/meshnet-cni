@@ -256,11 +256,12 @@ func (m *Meshnet) Update(ctx context.Context, pod *mpb.RemotePod) (*mpb.BoolResp
 
 //------------------------------------------------------------------------------------------------------
 func (m *Meshnet) RemGRPCWire(ctx context.Context, wireDef *mpb.WireDef) (*mpb.BoolResponse, error) {
-	resp := true
+
 	if err := grpcwire.DeleteWiresByPod(wireDef.KubeNs, wireDef.LocalPodName); err != nil {
-		resp = false
+
+		return &mpb.BoolResponse{Response: false}, err
 	}
-	return &mpb.BoolResponse{Response: resp}, nil
+	return &mpb.BoolResponse{Response: true}, nil
 }
 
 //------------------------------------------------------------------------------------------------------
@@ -272,7 +273,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 		return &mpb.BoolResponse{Response: false}, err
 	}
 
-	//+++think: Using google gopacket for packet receive. An alternative could be using socket. Not sure it it provides any advantage over gopacket.
+	//Using google gopacket for packet receive. An alternative could be using socket. Not sure it it provides any advantage over gopacket.
 	wrHandle, err := pcap.OpenLive(wireDef.VethNameLocalHost, 65365, true, pcap.BlockForever)
 	if err != nil {
 		log.Fatalf("Could not open interface for send/recv packets for containers. error:%v", err)
@@ -358,12 +359,12 @@ func (m *Meshnet) GRPCWireExists(ctx context.Context, wireDef *mpb.WireDef) (*mp
 }
 
 //---------------------------------------------------------------------------------------------------------------
-// Given the pod name and the pod interface, GenNodeIntfName generates the corresponding interface name in the node.
+// Given the pod name and the pod interface, GenerateNodeInterfaceName generates the corresponding interface name in the node.
 // This pod interface and the node interface later become the two end of a veth-pair
-func (m *Meshnet) GenNodeIntfName(ctx context.Context, in *mpb.ReqNodeIntfName) (*mpb.RespNodeIntfName, error) {
+func (m *Meshnet) GenerateNodeInterfaceName(ctx context.Context, in *mpb.GenerateNodeInterfaceNameRequest) (*mpb.GenerateNodeInterfaceNameResponse, error) {
 	locIfNm, err := grpcwire.GenNodeIfaceName(in.PodName, in.PodIntfName)
 	if err != nil {
-		return &mpb.RespNodeIntfName{Ok: false, NodeIntfName: ""}, err
+		return &mpb.GenerateNodeInterfaceNameResponse{Ok: false, NodeIntfName: ""}, err
 	}
-	return &mpb.RespNodeIntfName{Ok: true, NodeIntfName: locIfNm}, nil
+	return &mpb.GenerateNodeInterfaceNameResponse{Ok: true, NodeIntfName: locIfNm}, nil
 }

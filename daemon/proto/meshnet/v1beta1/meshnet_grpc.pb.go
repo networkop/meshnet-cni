@@ -33,8 +33,7 @@ type LocalClient interface {
 	// A node is going to hold multiple veth to connect to multiple containers.
 	// Each veth name must be unique with in a node. Daemon generates an ID that
 	// is unique in this node.
-	//rpc GenLocVEthID(ReqIntfID) returns (RespIntfID);
-	GenNodeIntfName(ctx context.Context, in *ReqNodeIntfName, opts ...grpc.CallOption) (*RespNodeIntfName, error)
+	GenerateNodeInterfaceName(ctx context.Context, in *GenerateNodeInterfaceNameRequest, opts ...grpc.CallOption) (*GenerateNodeInterfaceNameResponse, error)
 }
 
 type localClient struct {
@@ -117,9 +116,9 @@ func (c *localClient) RemGRPCWire(ctx context.Context, in *WireDef, opts ...grpc
 	return out, nil
 }
 
-func (c *localClient) GenNodeIntfName(ctx context.Context, in *ReqNodeIntfName, opts ...grpc.CallOption) (*RespNodeIntfName, error) {
-	out := new(RespNodeIntfName)
-	err := c.cc.Invoke(ctx, "/meshnet.v1beta1.Local/GenNodeIntfName", in, out, opts...)
+func (c *localClient) GenerateNodeInterfaceName(ctx context.Context, in *GenerateNodeInterfaceNameRequest, opts ...grpc.CallOption) (*GenerateNodeInterfaceNameResponse, error) {
+	out := new(GenerateNodeInterfaceNameResponse)
+	err := c.cc.Invoke(ctx, "/meshnet.v1beta1.Local/GenerateNodeInterfaceName", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -141,8 +140,7 @@ type LocalServer interface {
 	// A node is going to hold multiple veth to connect to multiple containers.
 	// Each veth name must be unique with in a node. Daemon generates an ID that
 	// is unique in this node.
-	//rpc GenLocVEthID(ReqIntfID) returns (RespIntfID);
-	GenNodeIntfName(context.Context, *ReqNodeIntfName) (*RespNodeIntfName, error)
+	GenerateNodeInterfaceName(context.Context, *GenerateNodeInterfaceNameRequest) (*GenerateNodeInterfaceNameResponse, error)
 	mustEmbedUnimplementedLocalServer()
 }
 
@@ -174,8 +172,8 @@ func (UnimplementedLocalServer) AddGRPCWireLocal(context.Context, *WireDef) (*Bo
 func (UnimplementedLocalServer) RemGRPCWire(context.Context, *WireDef) (*BoolResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemGRPCWire not implemented")
 }
-func (UnimplementedLocalServer) GenNodeIntfName(context.Context, *ReqNodeIntfName) (*RespNodeIntfName, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GenNodeIntfName not implemented")
+func (UnimplementedLocalServer) GenerateNodeInterfaceName(context.Context, *GenerateNodeInterfaceNameRequest) (*GenerateNodeInterfaceNameResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GenerateNodeInterfaceName not implemented")
 }
 func (UnimplementedLocalServer) mustEmbedUnimplementedLocalServer() {}
 
@@ -334,20 +332,20 @@ func _Local_RemGRPCWire_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Local_GenNodeIntfName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReqNodeIntfName)
+func _Local_GenerateNodeInterfaceName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GenerateNodeInterfaceNameRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(LocalServer).GenNodeIntfName(ctx, in)
+		return srv.(LocalServer).GenerateNodeInterfaceName(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/meshnet.v1beta1.Local/GenNodeIntfName",
+		FullMethod: "/meshnet.v1beta1.Local/GenerateNodeInterfaceName",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LocalServer).GenNodeIntfName(ctx, req.(*ReqNodeIntfName))
+		return srv.(LocalServer).GenerateNodeInterfaceName(ctx, req.(*GenerateNodeInterfaceNameRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -392,8 +390,8 @@ var Local_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Local_RemGRPCWire_Handler,
 		},
 		{
-			MethodName: "GenNodeIntfName",
-			Handler:    _Local_GenNodeIntfName_Handler,
+			MethodName: "GenerateNodeInterfaceName",
+			Handler:    _Local_GenerateNodeInterfaceName_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

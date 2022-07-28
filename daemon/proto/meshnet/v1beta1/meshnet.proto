@@ -100,13 +100,13 @@ message Packet {
   bytes frame = 2;
 }
 
-message ReqNodeIntfName {
+message GenerateNodeInterfaceNameRequest {
   string pod_intf_name = 1;
   string pod_name = 2;
 }
 
 
-message RespNodeIntfName {
+message GenerateNodeInterfaceNameResponse {
   bool ok = 1;
   string node_intf_name = 2;   
 }
@@ -125,7 +125,7 @@ service Local {
   // A node is going to hold multiple veth to connect to multiple containers. 
   // Each veth name must be unique with in a node. Daemon generates an ID that 
   // is unique in this node.
-  rpc GenNodeIntfName(ReqNodeIntfName) returns (RespNodeIntfName);
+  rpc GenerateNodeInterfaceName(GenerateNodeInterfaceNameRequest) returns (GenerateNodeInterfaceNameResponse);
 }
 
 service Remote {

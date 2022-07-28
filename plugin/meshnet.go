@@ -410,9 +410,9 @@ func cmdDel(args *skel.CmdArgs) error {
 		KubeNs:       string(cniArgs.K8S_POD_NAMESPACE),
 		LocalPodName: string(cniArgs.K8S_POD_NAME),
 	}
-	/*+++todo: Add response handling */
-	_, err = meshnetClient.RemGRPCWire(ctx, &wireDef)
-	if err != nil {
+
+	removResp, err := meshnetClient.RemGRPCWire(ctx, &wireDef)
+	if err != nil || !removResp.Response {
 		return fmt.Errorf("could not remove grpc wire: %v", err)
 	}
 

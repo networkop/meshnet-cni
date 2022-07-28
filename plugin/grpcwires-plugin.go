@@ -87,7 +87,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		return err
 	}
 
-	respIntfName, err := localClient.GenNodeIntfName(ctx, &mpb.ReqNodeIntfName{PodIntfName: link.LocalIntf, PodName: localPod.Name})
+	respIntfName, err := localClient.GenerateNodeInterfaceName(ctx, &mpb.GenerateNodeInterfaceNameRequest{PodIntfName: link.LocalIntf, PodName: localPod.Name})
 	if err != nil {
 		return fmt.Errorf("could create node interface: %v", err)
 	}
