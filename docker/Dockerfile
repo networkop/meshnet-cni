@@ -1,17 +1,11 @@
 # GRPC generation
-#FROM golang:1.17.2 AS proto_base
-FROM golang:1.18 AS proto_base
+FROM golang:1.18.2 AS proto_base
 
 WORKDIR /src
-
-# RUN go get -u google.golang.org/protobuf/cmd/protoc-gen-go
-# RUN go get -u google.golang.org/grpc/cmd/protoc-gen-go-grpc
-# RUN go get github.com/bufbuild/buf/cmd/buf@latest
 
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 RUN go install github.com/bufbuild/buf/cmd/buf@latest
-
 
 COPY daemon/proto .
 COPY buf.gen.yaml .
@@ -22,7 +16,7 @@ RUN buf lint && buf generate -v
 #---------------------------------------------- Stage 2: Build Base : Build mesnet binraries (Plugin & daemon) - ---------------------------------
 # Building the binaries
 #FROM golang:1.17.2 AS build_base
-FROM golang:1.18 AS build_base
+FROM golang:1.18.2 AS build_base
 
 
 WORKDIR /go/src/github.com/networkop/meshnet-cni
@@ -70,6 +64,7 @@ COPY --from=build /go/src/github.com/networkop/meshnet-cni/meshnet /
 COPY --from=build /go/src/github.com/networkop/meshnet-cni/meshnetd /
 #COPY etc/cni/net.d/meshnet.conf /
 COPY docker/new-entrypoint.sh /entrypoint.sh
+COPY LICENSE /
 RUN chmod +x ./entrypoint.sh
 RUN chmod +x /meshnetd
 #RUN mkdir /lib64 && ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2
