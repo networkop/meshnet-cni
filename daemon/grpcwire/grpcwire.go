@@ -276,7 +276,23 @@ func GenNodeIfaceName(podName string, podIfaceName string) (string, error) {
 
 	return ifaceName, nil
 }
+//----------------------------------------------------------------------------------------------------------
+func (wire *GRPCWire) Setup() error {
 
+	outIfNm, err := GenNodeIfaceName(wire.LocalPodName, wire.LocalPodIfaceName)
+	if err != nil {
+		return nil, fmt.Errorf("could not generate iface name for pod %s: %v", wire.LocalPodName, err)
+	}
+
+	currNs, err := ns.GetCurrentNS()
+	if err != nil {
+		return nil, fmt.Errorf("could not get current network namespace: %v", err)
+	}
+
+	CreatVethPair(name string, peerName string, mtu int)
+
+	return nil
+}
 //-----------------------------------------------------------------------------------------------------------
 //When the remote peer tells the local node to create the local end of the grpc-wire
 func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*GRPCWire, error) {
@@ -291,15 +307,15 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 		return grpcWire, nil
 	}
 
-	outIfNm, err := GenNodeIfaceName(wireDef.LocalPodName, wireDef.IntfNameInPod)
-	if err != nil {
-		return nil, fmt.Errorf("could not get current network namespace: %v", err)
-	}
+	// outIfNm, err := GenNodeIfaceName(wireDef.LocalPodName, wireDef.IntfNameInPod)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("could not get current network namespace: %v", err)
+	// }
 
-	currNs, err := ns.GetCurrentNS()
-	if err != nil {
-		return nil, fmt.Errorf("could not get current network namespace: %v", err)
-	}
+	// currNs, err := ns.GetCurrentNS()
+	// if err != nil {
+	// 	return nil, fmt.Errorf("could not get current network namespace: %v", err)
+	// }
 
 	/* Create the veth to connect the pod with the meshnet daemon running on the node */
 	hostEndVeth := koko.VEth{
@@ -307,17 +323,16 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 		LinkName: outIfNm,
 	}
 
-	inIfNm := wireDef.IntfNameInPod
 	inContainerVeth := koko.VEth{
 		NsName:   wireDef.LocalPodNetNs,
-		LinkName: inIfNm,
+		LinkName: wireDef.IntfNameInPod,
 	}
 
 	if wireDef.LocalPodIp != "" {
 		ipAddr, ipSubnet, err := net.ParseCIDR(wireDef.LocalPodIp)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create remote end of GRPC wire(%s@%s), failed to parse CIDR %s: %w",
-				inIfNm, wireDef.LocalPodName, wireDef.LocalPodIp, err)
+				wireDef.IntfNameInPod, wireDef.LocalPodName, wireDef.LocalPodIp, err)
 		}
 		inContainerVeth.IPAddr = []net.IPNet{{
 			IP:   ipAddr,
@@ -326,7 +341,7 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 	}
 
 	if err = koko.MakeVeth(inContainerVeth, hostEndVeth); err != nil {
-		log.Infof("Error creating vEth pair (in:%s <--> out:%s).  Error-> %s", inIfNm, outIfNm, err)
+		log.Infof("Error creating vEth pair (in:%s <--> out:%s).  Error-> %s", wireDef.IntfNameInPod, outIfNm, err)
 		return nil, err
 	}
 	locIface, err := net.InterfaceByName(hostEndVeth.LinkName)
@@ -334,11 +349,11 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 		log.Fatalf("Could not get interface index for %s. error:%v", hostEndVeth.LinkName, err)
 		return nil, err
 	}
-	log.Infof("On Remote Trigger: Successfully created vEth pair (in(name):%s <--> out(name-index):%s:%d).", inIfNm, outIfNm, locIface.Index)
 	aWire := &GRPCWire{
 		UID: int(wireDef.LinkUid),
 
-		LocalNodeIfaceID:   int64(locIface.Index),
+		//LocalNodeIfaceID:   int64(locIface.Index),
+		LocalNodeIfaceID:   0, // Will set to correct value during setup
 		LocalNodeIfaceName: hostEndVeth.LinkName,
 		LocalPodIP:         wireDef.LocalPodIp,
 		LocalPodIfaceName:  wireDef.IntfNameInPod,
@@ -348,26 +363,124 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 		PeerIfaceID: wireDef.PeerIntfId,
 		PeerPodIP:   wireDef.PeerIp,
 
-		IsReady:      true,
+		IsReady:      false, // Will ready during setup
 		Originator:   PEER_CREATED_WIRE,
 		OriginatorIP: wireDef.PeerIp,
 
 		StopC:     stopC,
 		Namespace: wireDef.KubeNs,
 	}
+	err := aWire.Setup()
+	if err != nil {
+		log.Fatalf("Could not set up pod %s to node (ip:%s) connection. error:%v", wireDef.LocalPodName, wireDef.PeerIp, err)
+		return nil, err
+	}
+
+	locIface, err =  net.InterfaceByIndex(int(aWire.LocalNodeIfaceID))
+	log.Infof("On Remote Trigger: Successfully created vEth pair (in(name):%s <--> out(name-index):%s:%d).", wireDef.IntfNameInPod, outIfNm, locIface.Index)
+
 	/* Utilizing google gopacket for polling for packets from the node. This seems to be the
 	   simplest way to get all packets.
 	   As an alternative to google gopacket(pcap), a socket based implementation is possible.
 	   Not sure if socket based implementation can bring any advantage or not.  */
 	wrHandle, err := pcap.OpenLive(hostEndVeth.LinkName, 65365, true, pcap.BlockForever)
 	if err != nil {
-		log.Fatalf("Could not open interface for sed/recv packets for containers. error:%v", err)
+		log.Fatalf("Could not open interface for sed/recv packets for pods. error:%v", err)
 		return nil, err
 	}
 
 	AddWire(aWire, wrHandle)
 	return aWire, nil
 }
+
+// func CreateGRPCWireRemoteTriggered_old(wireDef *mpb.WireDef, stopC chan struct{}) (*GRPCWire, error) {
+
+// 	var err error
+
+// 	/* If this link already created then do nothing. This can happen due to a race between the local and remote peer.
+// 	   We will allow only one to complete the creation. */
+// 	grpcWire, ok := GetWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid))
+// 	if ok && grpcWire.IsReady {
+// 		log.Infof("This grpc-wire is already created by %s. Local interface id : %d peer interface id : %d", grpcWire.Originator, grpcWire.LocalNodeIfaceID, grpcWire.PeerIfaceID)
+// 		return grpcWire, nil
+// 	}
+
+// 	outIfNm, err := GenNodeIfaceName(wireDef.LocalPodName, wireDef.IntfNameInPod)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("could not get current network namespace: %v", err)
+// 	}
+
+// 	currNs, err := ns.GetCurrentNS()
+// 	if err != nil {
+// 		return nil, fmt.Errorf("could not get current network namespace: %v", err)
+// 	}
+
+// 	/* Create the veth to connect the pod with the meshnet daemon running on the node */
+// 	hostEndVeth := koko.VEth{
+// 		NsName:   currNs.Path(),
+// 		LinkName: outIfNm,
+// 	}
+
+// 	inContainerVeth := koko.VEth{
+// 		NsName:   wireDef.LocalPodNetNs,
+// 		LinkName: wireDef.IntfNameInPod,
+// 	}
+
+// 	if wireDef.LocalPodIp != "" {
+// 		ipAddr, ipSubnet, err := net.ParseCIDR(wireDef.LocalPodIp)
+// 		if err != nil {
+// 			return nil, fmt.Errorf("failed to create remote end of GRPC wire(%s@%s), failed to parse CIDR %s: %w",
+// 				wireDef.IntfNameInPod, wireDef.LocalPodName, wireDef.LocalPodIp, err)
+// 		}
+// 		inContainerVeth.IPAddr = []net.IPNet{{
+// 			IP:   ipAddr,
+// 			Mask: ipSubnet.Mask,
+// 		}}
+// 	}
+
+// 	if err = koko.MakeVeth(inContainerVeth, hostEndVeth); err != nil {
+// 		log.Infof("Error creating vEth pair (in:%s <--> out:%s).  Error-> %s", wireDef.IntfNameInPod, outIfNm, err)
+// 		return nil, err
+// 	}
+// 	locIface, err := net.InterfaceByName(hostEndVeth.LinkName)
+// 	if err != nil {
+// 		log.Fatalf("Could not get interface index for %s. error:%v", hostEndVeth.LinkName, err)
+// 		return nil, err
+// 	}
+// 	log.Infof("On Remote Trigger: Successfully created vEth pair (in(name):%s <--> out(name-index):%s:%d).", wireDef.IntfNameInPod, outIfNm, locIface.Index)
+// 	aWire := &GRPCWire{
+// 		UID: int(wireDef.LinkUid),
+
+// 		LocalNodeIfaceID:   int64(locIface.Index),
+// 		LocalNodeIfaceName: hostEndVeth.LinkName,
+// 		LocalPodIP:         wireDef.LocalPodIp,
+// 		LocalPodIfaceName:  wireDef.IntfNameInPod,
+// 		LocalPodName:       wireDef.LocalPodName,
+// 		LocalPodNetNS:      wireDef.LocalPodNetNs,
+
+// 		PeerIfaceID: wireDef.PeerIntfId,
+// 		PeerPodIP:   wireDef.PeerIp,
+
+// 		IsReady:      true,
+// 		Originator:   PEER_CREATED_WIRE,
+// 		OriginatorIP: wireDef.PeerIp,
+
+// 		StopC:     stopC,
+// 		Namespace: wireDef.KubeNs,
+// 	}
+// 	/* Utilizing google gopacket for polling for packets from the node. This seems to be the
+// 	   simplest way to get all packets.
+// 	   As an alternative to google gopacket(pcap), a socket based implementation is possible.
+// 	   Not sure if socket based implementation can bring any advantage or not.  */
+// 	wrHandle, err := pcap.OpenLive(hostEndVeth.LinkName, 65365, true, pcap.BlockForever)
+// 	if err != nil {
+// 		log.Fatalf("Could not open interface for sed/recv packets for containers. error:%v", err)
+// 		return nil, err
+// 	}
+
+// 	AddWire(aWire, wrHandle)
+// 	return aWire, nil
+// }
 
 //-----------------------------------------------------------------------------------------------------------
 func RecvFrmLocalPodThread(wire *GRPCWire) error {
