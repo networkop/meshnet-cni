@@ -77,12 +77,20 @@ wait-for-meshnet:
 .PHONY: install
 ## Install meshnet into a test cluster
 install: kind-load kind-wait-for-cni kustomize kind-connect
-	kustomize build manifests/overlays/grpc-link  | kubectl apply -f -
+ifdef grpc
+	kustomize build manifests/overlays/grpc-link-e2e  | kubectl apply -f -
+else
+	kustomize build manifests/overlays/e2e | kubectl apply -f -
+endif
 
 .PHONY: uninstall
 ## Uninstall meshnet from a test cluster
 uninstall: kind-connect
-	-kustomize build manifests/overlays/grpc-link  | kubectl delete -f -
+ifdef grpc
+	-kustomize build manifests/overlays/grpc-link-e2e  | kubectl delete -f -
+else
+	-kustomize build manifests/overlays/e2e | kubectl delete -f -
+endif
 
 github-ci: kust-ensure build clean local upload install e2e
 
@@ -90,35 +98,3 @@ github-ci: kust-ensure build clean local upload install e2e
 # From: https://gist.github.com/klmr/575726c7e05d8780505a
 help:
 	@echo "$$(tput sgr0)";sed -ne"/^## /{h;s/.*//;:d" -e"H;n;s/^## //;td" -e"s/:.*//;G;s/\\n## /---/;s/\\n/ /g;p;}" ${MAKEFILE_LIST}|awk -F --- -v n=$$(tput cols) -v i=15 -v a="$$(tput setaf 6)" -v z="$$(tput sgr0)" '{printf"%s%*s%s ",a,-i,$$1,z;m=split($$2,w," ");l=n-i;for(j=1;j<=m;j++){l-=length(w[j])+1;if(l<= 0){l=n-i-length(w[j])-1;printf"\n%*s ",-i," ";}printf"%s ",w[j];}printf"\n";}'
-
-
-
-
-#----- the code below must not be upstreamed. This is for local testing only------------------------------
-
-GCP_TAG := gcr.io/kt-nts-athena-dev/${DOCKER_IMAGE}:${COMMIT}
-
-.PHONY: reset-kind
-reset-kind: down up install
-
-.PHONY: install-gcp
-## Install meshnet into a test cluster
-# install-gcp: kustomize-gcp
-# 	- docker tag ${DOCKER_IMAGE}:${COMMIT} ${GCP_TAG}
-# 	- echo ${GCP_TAG}
-# 	- docker push ${GCP_TAG}
-# 	- kustomize build manifests/overlays/grpc-link-gcp  | kubectl apply -f -
-
-install-gcp: kustomize-gcp
-	- docker tag ${DOCKER_IMAGE}:${COMMIT} ${GCP_TAG}
-	- echo ${GCP_TAG}
-	- docker push ${GCP_TAG}
-	- kustomize build manifests/overlays/grpc-link-gcp  | kubectl apply -f -
-
-
-
-.PHONY: uninstall-gcp
-uninstall-gcp: 
-	- ../my-tools/remove-meshnet-gcp.zsh ${GCP_TAG}
-	- kustomize build manifests/overlays/grpc-link-gcp  | kubectl delete -f -
-

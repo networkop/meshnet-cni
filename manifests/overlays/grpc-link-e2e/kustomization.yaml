@@ -4,4 +4,4 @@ images:
 - name: networkop/meshnet
   newTag: 1e6d7eb-dirty
 resources:
-- ../../base/
+- ../grpc-link/
