@@ -125,7 +125,7 @@ func CreateRandomIntfName() (string, error) {
 	maxRetry := 3
 	rand.Seed(time.Now().UnixNano())
 	for retry <= maxRetry {
-		iName := fmt.Sprintf("tmp%11d", rand.Uint32())
+		iName := fmt.Sprintf("tmp%.11v", rand.Uint32())
 		_, err := net.InterfaceByName(iName)
 		if err == nil {
 			// This interface exists, retry with another random name
@@ -220,7 +220,7 @@ func CreatVethPairInNS(peer1Name string, peer2Name string, peer1NetNsName string
 
 	// create the veth pair in the current network namespace
 	if err = CreatVethPair(peer1NameTemp, peer2NameTemp, mtu); err != nil {
-		return fmt.Errorf("%v : %s:%s:%d", err, peer1NameTemp, peer2NameTemp, mtu)
+		return fmt.Errorf("%v", err)
 	}
 
 	// if a destination namespace is mentioned then move the local temp interface to the

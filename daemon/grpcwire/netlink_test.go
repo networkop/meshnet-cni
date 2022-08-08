@@ -236,9 +236,9 @@ func Test_CreatVethPairInNS(t *testing.T) {
 
 	//Create two temp namespace
 	ns1Name := "gotest-ns1"
-	ns1Veth := "ns1If1"
+	ns1Veth := "ns1test-If1"
 	ns2Name := "gotest-ns2"
-	ns2Veth := "ns2If2"
+	ns2Veth := "ns2test-If2"
 
 	ns1, err := netns.NewNamed(ns1Name)
 	if err != nil {
