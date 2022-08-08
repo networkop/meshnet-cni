@@ -17,8 +17,11 @@ all: docker
 
 ## Run unit tests
 test:
-	go test ./...
-
+	#go test ./...
+	#go test -v ./...
+	#go test -v ./daemon/grpcwire/
+	go test -v ./daemon/grpcwire/ -run Test_CreatVethPairInNS
+	
 # Build local binaries
 local-build:
 	CGO_ENABLED=0 GOOS=linux go build -o meshnet github.com/networkop/meshnet-cni/plugin 

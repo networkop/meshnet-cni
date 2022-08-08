@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -61,6 +60,7 @@ const (
 type GRPCWire struct {
 	UID       int    // uid identify a particular link in a topology as per meshnet crd
 	Namespace string // K8s namespace this wire belongs to
+	mtu       int    // mtu of this wire
 
 	/* Node information */
 	LocalNodeIfaceID   int64  // OS assigned interface ID of local node interface
@@ -276,23 +276,34 @@ func GenNodeIfaceName(podName string, podIfaceName string) (string, error) {
 
 	return ifaceName, nil
 }
+
 //----------------------------------------------------------------------------------------------------------
 func (wire *GRPCWire) Setup() error {
 
 	outIfNm, err := GenNodeIfaceName(wire.LocalPodName, wire.LocalPodIfaceName)
 	if err != nil {
-		return nil, fmt.Errorf("could not generate iface name for pod %s: %v", wire.LocalPodName, err)
+		return fmt.Errorf("could not generate interface name for pod %s: %v", wire.LocalPodName, err)
 	}
 
-	currNs, err := ns.GetCurrentNS()
+	CreatVethPairInNS(outIfNm, wire.LocalPodIfaceName, "", wire.LocalPodNetNS, wire.mtu)
+
+	locIface, err := net.InterfaceByName(wire.LocalNodeIfaceName)
 	if err != nil {
-		return nil, fmt.Errorf("could not get current network namespace: %v", err)
+		log.Fatalf("Could not get interface index for %s. error:%v", wire.LocalNodeIfaceName, err)
+		return err
 	}
+	wire.LocalNodeIfaceName = outIfNm
+	wire.LocalNodeIfaceID = int64(locIface.Index)
 
-	CreatVethPair(name string, peerName string, mtu int)
-
+	if wire.LocalPodIP != "" {
+		if err = AssignIntfIP(wire.LocalPodNetNS, wire.LocalPodIfaceName, wire.LocalPodIP); err != nil {
+			return nil
+		}
+	}
+	wire.IsReady = true
 	return nil
 }
+
 //-----------------------------------------------------------------------------------------------------------
 //When the remote peer tells the local node to create the local end of the grpc-wire
 func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*GRPCWire, error) {
@@ -307,54 +318,29 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 		return grpcWire, nil
 	}
 
-	// outIfNm, err := GenNodeIfaceName(wireDef.LocalPodName, wireDef.IntfNameInPod)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("could not get current network namespace: %v", err)
+	// inContainerVeth := koko.VEth{
+	// 	NsName:   wireDef.LocalPodNetNs,
+	// 	LinkName: wireDef.IntfNameInPod,
 	// }
 
-	// currNs, err := ns.GetCurrentNS()
-	// if err != nil {
-	// 	return nil, fmt.Errorf("could not get current network namespace: %v", err)
+	// if wireDef.LocalPodIp != "" {
+	// 	ipAddr, ipSubnet, err := net.ParseCIDR(wireDef.LocalPodIp)
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf("failed to create remote end of GRPC wire(%s@%s), failed to parse CIDR %s: %w",
+	// 			wireDef.IntfNameInPod, wireDef.LocalPodName, wireDef.LocalPodIp, err)
+	// 	}
+	// 	inContainerVeth.IPAddr = []net.IPNet{{
+	// 		IP:   ipAddr,
+	// 		Mask: ipSubnet.Mask,
+	// 	}}
 	// }
 
-	/* Create the veth to connect the pod with the meshnet daemon running on the node */
-	hostEndVeth := koko.VEth{
-		NsName:   currNs.Path(),
-		LinkName: outIfNm,
-	}
-
-	inContainerVeth := koko.VEth{
-		NsName:   wireDef.LocalPodNetNs,
-		LinkName: wireDef.IntfNameInPod,
-	}
-
-	if wireDef.LocalPodIp != "" {
-		ipAddr, ipSubnet, err := net.ParseCIDR(wireDef.LocalPodIp)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create remote end of GRPC wire(%s@%s), failed to parse CIDR %s: %w",
-				wireDef.IntfNameInPod, wireDef.LocalPodName, wireDef.LocalPodIp, err)
-		}
-		inContainerVeth.IPAddr = []net.IPNet{{
-			IP:   ipAddr,
-			Mask: ipSubnet.Mask,
-		}}
-	}
-
-	if err = koko.MakeVeth(inContainerVeth, hostEndVeth); err != nil {
-		log.Infof("Error creating vEth pair (in:%s <--> out:%s).  Error-> %s", wireDef.IntfNameInPod, outIfNm, err)
-		return nil, err
-	}
-	locIface, err := net.InterfaceByName(hostEndVeth.LinkName)
-	if err != nil {
-		log.Fatalf("Could not get interface index for %s. error:%v", hostEndVeth.LinkName, err)
-		return nil, err
-	}
 	aWire := &GRPCWire{
 		UID: int(wireDef.LinkUid),
 
 		//LocalNodeIfaceID:   int64(locIface.Index),
-		LocalNodeIfaceID:   0, // Will set to correct value during setup
-		LocalNodeIfaceName: hostEndVeth.LinkName,
+		LocalNodeIfaceID:   0,  // Will set to correct value during setup
+		LocalNodeIfaceName: "", // Will set to correct value during setup
 		LocalPodIP:         wireDef.LocalPodIp,
 		LocalPodIfaceName:  wireDef.IntfNameInPod,
 		LocalPodName:       wireDef.LocalPodName,
@@ -369,21 +355,21 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 
 		StopC:     stopC,
 		Namespace: wireDef.KubeNs,
+		mtu:       6400, // TODO: This will come from CRD later.
 	}
-	err := aWire.Setup()
+	err = aWire.Setup()
 	if err != nil {
 		log.Fatalf("Could not set up pod %s to node (ip:%s) connection. error:%v", wireDef.LocalPodName, wireDef.PeerIp, err)
 		return nil, err
 	}
 
-	locIface, err =  net.InterfaceByIndex(int(aWire.LocalNodeIfaceID))
-	log.Infof("On Remote Trigger: Successfully created vEth pair (in(name):%s <--> out(name-index):%s:%d).", wireDef.IntfNameInPod, outIfNm, locIface.Index)
+	log.Infof("On Remote Trigger: Successfully created vEth pair (in(name):%s <--> out(name-index):%s:%d).", aWire.LocalPodIfaceName, aWire.LocalNodeIfaceName, aWire.LocalNodeIfaceID)
 
 	/* Utilizing google gopacket for polling for packets from the node. This seems to be the
 	   simplest way to get all packets.
 	   As an alternative to google gopacket(pcap), a socket based implementation is possible.
 	   Not sure if socket based implementation can bring any advantage or not.  */
-	wrHandle, err := pcap.OpenLive(hostEndVeth.LinkName, 65365, true, pcap.BlockForever)
+	wrHandle, err := pcap.OpenLive(aWire.LocalNodeIfaceName, 65365, true, pcap.BlockForever)
 	if err != nil {
 		log.Fatalf("Could not open interface for sed/recv packets for pods. error:%v", err)
 		return nil, err
