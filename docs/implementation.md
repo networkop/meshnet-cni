@@ -20,7 +20,6 @@ When a pod wants to send a packet to a remote pod, it writes it on the interface
 message Packet {
     int64 remot_intf_id = 1;   //remote machine interface id, to which packets to be delivered. 
     bytes frame = 2;           //raw bytes
-    int64 frame_len = 3;       //packet length
 }
 ```
 
