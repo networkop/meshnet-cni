@@ -92,6 +92,9 @@ func RenameIntf(netNs ns.NetNS, currIntfName string, newIntfName string) error {
 func AssignIntfIP(netNsName string, intfName string, ipStr string) error {
 
 	aNetNs, err := GetNetworkNs(netNsName)
+	if err != nil {
+		return fmt.Errorf("couldn't access namespace %s :%v", netNsName, err)
+	}
 	defer aNetNs.Close()
 
 	ipAddr, ipSubnet, err := net.ParseCIDR(ipStr)

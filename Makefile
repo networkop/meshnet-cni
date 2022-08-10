@@ -20,7 +20,9 @@ test:
 	#go test ./...
 	#go test -v ./...
 	#go test -v ./daemon/grpcwire/
-	go test -v ./daemon/grpcwire/ -run Test_CreatVethPairInNS
+	#go test -v ./daemon/grpcwire/ -run Test_CreatVethPairInNS
+	#go test -v ./daemon/grpcwire/ -run Test_AssignIntfIP
+	go test -v ./daemon/grpcwire/ -run Test_RenameIntf
 	
 # Build local binaries
 local-build:
