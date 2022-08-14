@@ -12,15 +12,19 @@ import (
 )
 
 const (
-    CTRL_TYPE_LATENCY = iota
-    CTRL_TYPE_LOSS
-    CTRL_TYPE_DUPLICATE
-    CTRL_TYPE_LOSS_CORR
-    CTRL_TYPE_JITTER
-    CTRL_TYPE_DELAY_CORR
-    CTRL_TYPE_REORDER_PROB
-    CTRL_TYPE_CORRUPT_PROB
-    CTRL_TYPE_CORRUPT_CORR
+    CTRL_TYPE_LATENCY = iota      // us
+    CTRL_TYPE_LOSS                // %
+    CTRL_TYPE_DUPLICATE           // %
+    CTRL_TYPE_DUPLICATE_CORR      // %
+    CTRL_TYPE_LOSS_CORR           // %
+    CTRL_TYPE_JITTER              // us
+    CTRL_TYPE_LIMIT
+    CTRL_TYPE_GAP
+    CTRL_TYPE_DELAY_CORR          // %
+    CTRL_TYPE_REORDER_PROB        // %
+    CTRL_TYPE_REORDER_CORR        // %
+    CTRL_TYPE_CORRUPT_PROB        // %
+    CTRL_TYPE_CORRUPT_CORR        // %
 )
 
 const (
@@ -331,8 +335,29 @@ func setLinkIP(link netlink.Link, ipAddr net.IPNet) error {
 
 // link, err := netlink.LinkByName(vethLinkName)
 
-// ifaceName: Interface name where delay is to be set. It must exist 
-// delay: how long a pkt to be delayed in us
+/*
+ This func adds flow control on an interface.
+ ifaceName: Interface name where flow controls are to be set. It must exist 
+ ctrlMap: map of {control, value}. following is the supported controls
+    CTRL_TYPE_LATENCY             // us
+    CTRL_TYPE_LOSS                // %
+    CTRL_TYPE_DUPLICATE           // %
+    CTRL_TYPE_DUPLICATE_CORR      // %
+    CTRL_TYPE_LOSS_CORR           // %
+    CTRL_TYPE_JITTER              // us
+    CTRL_TYPE_LIMIT
+    CTRL_TYPE_GAP
+    CTRL_TYPE_DELAY_CORR          // %
+    CTRL_TYPE_REORDER_PROB        // %
+    CTRL_TYPE_REORDER_CORR        // %
+    CTRL_TYPE_CORRUPT_PROB        // %
+    CTRL_TYPE_CORRUPT_CORR        // %
+
+    example:
+    ctrlMap := make(map[int]float32)
+    ctrlMap[CTRL_TYPE_LATENCY] = 150 * 1000
+    ctrlMap[CTRL_TYPE_LOSS] = 10
+*/
 func AddFlowControlOnIface(ifaceName string, ctrlMap map[int]float32) (*netlink.Netem, error) {
 	link, err := netlink.LinkByName(ifaceName)
 	if err != nil {
@@ -343,16 +368,9 @@ func AddFlowControlOnIface(ifaceName string, ctrlMap map[int]float32) (*netlink.
     return updateFlowControlOnLink(link, ctrlMap, CTRL_ADD)
 }
 
-//func AddFlowControlOnIface2(ifaceName string, ctrlType int, value float32) (*netlink.Netem, error) {
-//	link, err := netlink.LinkByName(ifaceName)
-//	if err != nil {
-//		fmt.Printf("Interface %s does not exist: %v\n", ifaceName, err)
-//        return nil, err
-//	}
-
-    //return updateFlowControlOnLink(link, ctrlType, value)
-//}
-
+/*
+ NOTE: this func needs to enhance when flow control per class is required
+*/
 func updateFlowControlOnLink(link netlink.Link, ctrlMap map[int]float32, update int) (*netlink.Netem, error) {
     nattrs := netlink.NetemQdiscAttrs{}
 
@@ -381,6 +399,9 @@ func updateFlowControlOnLink(link netlink.Link, ctrlMap map[int]float32, update 
 	return netem, nil
 }
 
+/*
+ This func changes flow control on an interface.
+*/
 func ChangeFlowControlOnIface(ifaceName string, ctrlMap map[int]float32) (*netlink.Netem, error) {
 	link, err := netlink.LinkByName(ifaceName)
 	if err != nil {
@@ -391,69 +412,9 @@ func ChangeFlowControlOnIface(ifaceName string, ctrlMap map[int]float32) (*netli
     return updateFlowControlOnLink(link, ctrlMap, CTRL_CHANGE)
 }
 
-func AppendFlowControlOnIface2(ifaceName string, ctrlType int, value float32) (*netlink.Netem, error) {
-    var netem *netlink.Netem
-    var ok bool
-
-	link, err := netlink.LinkByName(ifaceName)
-	if err != nil {
-		fmt.Printf("Interface %s does not exist: %v\n", ifaceName, err)
-        return nil, err
-	}
-
-    qdiscs, err := GetFlowControlList(ifaceName)
-    if err == nil {
-        for _, qdisc := range qdiscs {
-            netem, ok = qdisc.(*netlink.Netem)
-            if ok {
-                break
-            }
-        }
-        if netem == nil {
-            //netem is not present, qdisc may be present with different type
-        }
-    }
-
-    return appendFlowControlOnLink(link, netem, ctrlType, value)
-}
-
-func appendFlowControlOnLink(link netlink.Link, netem *netlink.Netem, ctrlType int, value float32) (*netlink.Netem, error) {
-    var nattrs netlink.NetemQdiscAttrs
-
-    qattrs := netlink.QdiscAttrs{
-                LinkIndex: link.Attrs().Index,
-                Handle:    netlink.MakeHandle(0xffff, 0),
-                Parent:    netlink.HANDLE_ROOT,
-    }
-
-    if netem == nil {
-        nattrs = netlink.NetemQdiscAttrs{}
-    } else {
-        //netem exists. append new settings with existing settings
-        nattrs = netlink.NetemQdiscAttrs{
-                Latency:     netem.Latency,
-                Loss:        float32(netem.Loss),
-                Duplicate:   float32(netem.Duplicate),
-                LossCorr:    float32(netem.LossCorr),
-                Jitter:      netem.Jitter,
-                DelayCorr:   float32(netem.DelayCorr),
-                ReorderProb: float32(netem.ReorderProb),
-                CorruptProb: float32(netem.CorruptProb),
-                CorruptCorr: float32(netem.CorruptCorr),
-        }
-    }
-
-    //update latest config
-    setCtrlValue(&nattrs, ctrlType, value)
-
-    netem = netlink.NewNetem(qattrs, nattrs)
-    if err := netlink.QdiscChange(netem); err != nil {
-		fmt.Printf("Failed to change qdisc for control type %s on link %d\n", "todo", link.Attrs().Index)
-	    return netem, err
-    }
-	return netem, nil
-}
-
+/*
+ This func sets control type and its value into NetemQdiscAttrs
+*/
 func setCtrlValue(nattrs *netlink.NetemQdiscAttrs, ctrlType int, value float32) {
     switch ctrlType {
     case CTRL_TYPE_LATENCY:
@@ -462,14 +423,22 @@ func setCtrlValue(nattrs *netlink.NetemQdiscAttrs, ctrlType int, value float32) 
         nattrs.Loss = value
     case CTRL_TYPE_DUPLICATE:
         nattrs.Duplicate = value
+    case CTRL_TYPE_DUPLICATE_CORR:
+        nattrs.DuplicateCorr = value
     case CTRL_TYPE_LOSS_CORR:
         nattrs.LossCorr = value
     case CTRL_TYPE_JITTER:
         nattrs.Jitter = uint32(value)
+    case CTRL_TYPE_LIMIT:
+        nattrs.Limit = uint32(value)
+    case CTRL_TYPE_GAP:
+        nattrs.Gap = uint32(value)
     case CTRL_TYPE_DELAY_CORR:
         nattrs.DelayCorr = value
     case CTRL_TYPE_REORDER_PROB:
         nattrs.ReorderProb = value
+    case CTRL_TYPE_REORDER_CORR:
+        nattrs.ReorderCorr = value
     case CTRL_TYPE_CORRUPT_PROB:
         nattrs.CorruptProb = value
     case CTRL_TYPE_CORRUPT_CORR:
@@ -479,6 +448,9 @@ func setCtrlValue(nattrs *netlink.NetemQdiscAttrs, ctrlType int, value float32) 
     }
 }
 
+/*
+ This func retrieves flow control list from an interface
+*/
 func GetFlowControlList(ifaceName string) ([]netlink.Qdisc, error) {
 	link, err := netlink.LinkByName(ifaceName)
 	if err != nil {
@@ -503,6 +475,22 @@ func GetFlowControlList(ifaceName string) ([]netlink.Qdisc, error) {
     return result, nil
 }
 
-func DelFlowControl(qdisc netlink.Qdisc) error {
+/*
+ This func removes all flow controls from an interface
+*/
+func RemoveFlowControlOnIface(ifaceName string) error {
+    qdiscs, err := GetFlowControlList(ifaceName)
+    if err != nil {
+        fmt.Errorf("Could not retrieve flow control list on iface %s: %v\n", ifaceName, err)
+    }
+    for _, qdisc := range qdiscs {
+        if err := netlink.QdiscDel(qdisc); err != nil {
+            return err;
+        }
+    }
+    return nil
+}
+
+func delFlowControl(qdisc netlink.Qdisc) error {
     return netlink.QdiscDel(qdisc)
 }

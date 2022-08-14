@@ -477,71 +477,113 @@ func Test_AddFlowControlOnIface(t *testing.T) {
 	var err error
 
 	if !isRoot() {
-		t.Errorf("Test_AddQdiscPktDelayToIface must be done as root or use sudo")
-		return
+		t.Fatal("Test_AddFlowControlOnIface must be done as root or use sudo")
 	}
 
     if err := netlink.LinkAdd(&netlink.Ifb{netlink.LinkAttrs{Name: ifaceName}}); err != nil {
-        t.Fatal(err)
+        t.Fatal("Could not create interface to test flow control:", err)
     }
 	currNs, err := ns.GetCurrentNS()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("Could not retrieve cyrrent ns:", err)
 	}
 	defer currNs.Close()
 	defer cleanupVethPair(t, currNs, ifaceName)
 
     link, err := netlink.LinkByName(ifaceName)
     if err != nil {
-        t.Fatal(err)
+        t.Fatal("Could not get interface by name:", err)
     }
     if err := netlink.LinkSetUp(link); err != nil {
-        t.Fatal(err)
+        t.Fatal("Could not set interface up:", err)
     }
 
+    // prepare flow controls to be set on interface
     ctrlMap := make(map[int]float32)
     ctrlMap[CTRL_TYPE_LATENCY] = 150 * 1000
-    ctrlMap[CTRL_TYPE_LOSS] = 20
-    ctrlMap[CTRL_TYPE_DELAY_CORR] = 30
-    //var delay float32 = 150 * 1000 // 150ms
-    //cNetem, err := AddFlowControlOnIface2(ifaceName, CTRL_TYPE_LATENCY, delay)
+    ctrlMap[CTRL_TYPE_LOSS] = 10
+    ctrlMap[CTRL_TYPE_DUPLICATE] = 20
+    ctrlMap[CTRL_TYPE_DUPLICATE_CORR] = 30
+    ctrlMap[CTRL_TYPE_LOSS_CORR] = 30
+    ctrlMap[CTRL_TYPE_JITTER] = 40
+    ctrlMap[CTRL_TYPE_DELAY_CORR] = 50
+    ctrlMap[CTRL_TYPE_REORDER_PROB] = 60
+    ctrlMap[CTRL_TYPE_REORDER_CORR] = 65
+    ctrlMap[CTRL_TYPE_CORRUPT_PROB] = 70
+    ctrlMap[CTRL_TYPE_CORRUPT_CORR] = 80
+    ctrlMap[CTRL_TYPE_LIMIT] = 90
+    ctrlMap[CTRL_TYPE_GAP] = 500
+
     cNetem, err := AddFlowControlOnIface(ifaceName, ctrlMap)
     if err != nil {
-        t.Errorf("Failed to set qdisc delay on iface %s\n", ifaceName)
-        t.Fatal(err)
+        t.Fatal("Failed to set flow control on iface", ifaceName, " :", err)
     }
 
     qdiscs, err := GetFlowControlList(ifaceName)
     if err != nil {
-        t.Fatal(err)
+        t.Fatal("Could not retrieve flow control list in iface", ifaceName, " :", err)
     }
-    
+
     if len(qdiscs) != 1 {
-        t.Fatal("Failed to add qdisc")
+        t.Fatal("Failed to add flow control correctly")
     }
     netem, ok := qdiscs[0].(*netlink.Netem)
     if !ok {
-        t.Fatal("Qdisc is the wrong type")
+        t.Fatal("Qdisc type is wrong")
     }
     // Compare the record we got from the list with the one we created
     if netem.Latency != cNetem.Latency {
         t.Fatal("Latency does not match: expected", cNetem.Latency, "got", netem.Latency)
     }
+    if netem.DelayCorr != cNetem.DelayCorr{
+        t.Fatal("DelayCorr does not match: expected", cNetem.DelayCorr, "got", netem.DelayCorr)
+    }
+    if netem.Limit != cNetem.Limit {
+        t.Fatal("Limit does not match: expected", cNetem.Limit, "got", netem.Limit)
+    }
+    if netem.Loss != cNetem.Loss {
+        t.Fatal("Loss does not match: expected", cNetem.Loss, "got", netem.Loss)
+    }
+    if netem.LossCorr != cNetem.LossCorr {
+        t.Fatal("LossCorr does not match: expected", cNetem.LossCorr, "got", netem.LossCorr)
+    }
+    if netem.Gap != cNetem.Gap {
+        t.Fatal("Gap does not match: expected", cNetem.Gap, "got", netem.Gap)
+    }
+    if netem.Duplicate != cNetem.Duplicate {
+        t.Fatal("Duplicate does not match: expected", cNetem.Duplicate, "got", netem.Duplicate)
+    }
+    if netem.DuplicateCorr != cNetem.DuplicateCorr {
+        t.Fatal("DuplicateCorr does not match: expected", cNetem.DuplicateCorr, "got", netem.DuplicateCorr)
+    }
+    if netem.Jitter != cNetem.Jitter {
+        t.Fatal("Jitter does not match: expected", cNetem.Jitter, "got", netem.Jitter)
+    }
+    if netem.ReorderProb != cNetem.ReorderProb {
+        t.Fatal("ReorderProb does not match: expected", cNetem.ReorderProb, "got", netem.ReorderProb)
+    }
+    if netem.ReorderCorr != cNetem.ReorderCorr {
+        t.Fatal("ReorderCorr does not match: expected", cNetem.ReorderCorr, "got", netem.ReorderCorr)
+    }
+    if netem.CorruptProb != cNetem.CorruptProb {
+        t.Fatal("CorruptProb does not match: expected", cNetem.CorruptProb, "got", netem.CorruptProb)
+    }
+    if netem.CorruptCorr != cNetem.CorruptCorr {
+        t.Fatal("CorruptCorr does not match: expected", cNetem.CorruptCorr, "got", netem.CorruptCorr)
+    }
 
-    // Deletion
-    if err := DelFlowControl(qdiscs[0]); err != nil {
-        t.Fatal(err)
+    // Cleanup 
+    if err := RemoveFlowControlOnIface(ifaceName); err != nil {
+        t.Fatal("Could not remove flow control from interface", ifaceName, " :", err)
     }
     qdiscs, err = GetFlowControlList(ifaceName)
     if err != nil {
-        t.Fatal(err)
+        t.Fatal("Could not retrieve flow control after deletion on interface", ifaceName, " :", err)
     }
     if len(qdiscs) != 0 {
-        t.Fatal("Failed to remove qdisc")
+        t.Fatal("Failed to remove qdisc/flow control from interface", ifaceName, "after deletion")
     }
-
-	//clean up
-	t.Logf("Test passed: Successfully added flow control on iface %s", ifaceName)
+	t.Logf("Test passed: Successfully added flow control on interface %s", ifaceName)
 }
 
 //--------------------------------------------------------------------------------------------
@@ -551,87 +593,186 @@ func Test_ChangeFlowControlOnIface(t *testing.T) {
 	var err error
 
 	if !isRoot() {
-		t.Errorf("Test_ChangeFlowControlOnIface must be done as root or use sudo")
-		return
+		t.Fatal("Test_ChangeFlowControlOnIface must be done as root or use sudo")
 	}
 
     if err := netlink.LinkAdd(&netlink.Ifb{netlink.LinkAttrs{Name: ifaceName}}); err != nil {
-        t.Fatal(err)
+        t.Fatal("Could not create interface to test flow control:", err)
     }
 	currNs, err := ns.GetCurrentNS()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("Could not retrieve cyrrent ns:", err)
 	}
 	defer currNs.Close()
 	defer cleanupVethPair(t, currNs, ifaceName)
 
     link, err := netlink.LinkByName(ifaceName)
     if err != nil {
-        t.Fatal(err)
+        t.Fatal("Could not get interface by name:", err)
     }
     if err := netlink.LinkSetUp(link); err != nil {
-        t.Fatal(err)
+        t.Fatal("Could not set interface up:", err)
     }
 
+    // prepare flow controls to be set on interface
     ctrlMap := make(map[int]float32)
     ctrlMap[CTRL_TYPE_LATENCY] = 150 * 1000
-    ctrlMap[CTRL_TYPE_LOSS] = 20
-    ctrlMap[CTRL_TYPE_DELAY_CORR] = 30
-    
+    ctrlMap[CTRL_TYPE_LOSS] = 10
+    ctrlMap[CTRL_TYPE_DUPLICATE] = 20
+    ctrlMap[CTRL_TYPE_DUPLICATE_CORR] = 30
+    ctrlMap[CTRL_TYPE_LOSS_CORR] = 30
+    ctrlMap[CTRL_TYPE_JITTER] = 40
+    ctrlMap[CTRL_TYPE_DELAY_CORR] = 50
+    ctrlMap[CTRL_TYPE_REORDER_PROB] = 60
+    ctrlMap[CTRL_TYPE_REORDER_CORR] = 65
+    ctrlMap[CTRL_TYPE_CORRUPT_PROB] = 70
+    ctrlMap[CTRL_TYPE_CORRUPT_CORR] = 80
+    ctrlMap[CTRL_TYPE_LIMIT] = 90
+    ctrlMap[CTRL_TYPE_GAP] = 500
+
     cNetem, err := AddFlowControlOnIface(ifaceName, ctrlMap)
     if err != nil {
-        t.Errorf("Failed to set qdisc delay on iface %s\n", ifaceName)
-        t.Fatal(err)
-    }
-
-    ctrlMap2 := make(map[int]float32)
-    ctrlMap2[CTRL_TYPE_LATENCY] = 150 * 1000
-    ctrlMap2[CTRL_TYPE_LOSS] = 20
-    ctrlMap2[CTRL_TYPE_DELAY_CORR] = 30
-    ctrlMap2[CTRL_TYPE_JITTER] = 50
-    cNetem, err = ChangeFlowControlOnIface(ifaceName, ctrlMap2)
-    if err != nil {
-        t.Fatal("Failed to change flow control on iface", ifaceName)
+        t.Fatal("Failed to set flow control on iface", ifaceName, " :", err)
     }
 
     qdiscs, err := GetFlowControlList(ifaceName)
     if err != nil {
-        t.Fatal(err)
+        t.Fatal("Could not retrieve flow control list in iface", ifaceName, " :", err)
     }
-    
+
     if len(qdiscs) != 1 {
-        t.Fatal("Failed to change flow control")
+        t.Fatal("Failed to add flow control correctly")
     }
     netem, ok := qdiscs[0].(*netlink.Netem)
     if !ok {
-        t.Fatal("Qdisc is the wrong type")
+        t.Fatal("Qdisc type is wrong")
     }
     // Compare the record we got from the list with the one we created
     if netem.Latency != cNetem.Latency {
         t.Fatal("Latency does not match: expected", cNetem.Latency, "got", netem.Latency)
     }
+    if netem.DelayCorr != cNetem.DelayCorr{
+        t.Fatal("DelayCorr does not match: expected", cNetem.DelayCorr, "got", netem.DelayCorr)
+    }
+    if netem.Limit != cNetem.Limit {
+        t.Fatal("Limit does not match: expected", cNetem.Limit, "got", netem.Limit)
+    }
     if netem.Loss != cNetem.Loss {
         t.Fatal("Loss does not match: expected", cNetem.Loss, "got", netem.Loss)
     }
-    if netem.DelayCorr != cNetem.DelayCorr {
-        t.Fatal("DelayCorr does not match: expected", cNetem.DelayCorr, "got", netem.DelayCorr)
+    if netem.LossCorr != cNetem.LossCorr {
+        t.Fatal("LossCorr does not match: expected", cNetem.LossCorr, "got", netem.LossCorr)
+    }
+    if netem.Gap != cNetem.Gap {
+        t.Fatal("Gap does not match: expected", cNetem.Gap, "got", netem.Gap)
+    }
+    if netem.Duplicate != cNetem.Duplicate {
+        t.Fatal("Duplicate does not match: expected", cNetem.Duplicate, "got", netem.Duplicate)
+    }
+    if netem.DuplicateCorr != cNetem.DuplicateCorr {
+        t.Fatal("DuplicateCorr does not match: expected", cNetem.DuplicateCorr, "got", netem.DuplicateCorr)
     }
     if netem.Jitter != cNetem.Jitter {
         t.Fatal("Jitter does not match: expected", cNetem.Jitter, "got", netem.Jitter)
     }
+    if netem.ReorderProb != cNetem.ReorderProb {
+        t.Fatal("ReorderProb does not match: expected", cNetem.ReorderProb, "got", netem.ReorderProb)
+    }
+    if netem.ReorderCorr != cNetem.ReorderCorr {
+        t.Fatal("ReorderCorr does not match: expected", cNetem.ReorderCorr, "got", netem.ReorderCorr)
+    }
+    if netem.CorruptProb != cNetem.CorruptProb {
+        t.Fatal("CorruptProb does not match: expected", cNetem.CorruptProb, "got", netem.CorruptProb)
+    }
+    if netem.CorruptCorr != cNetem.CorruptCorr {
+        t.Fatal("CorruptCorr does not match: expected", cNetem.CorruptCorr, "got", netem.CorruptCorr)
+    }
 
-	//clean up
-    if err := DelFlowControl(qdiscs[0]); err != nil {
-        t.Fatal(err)
+    // change control properties
+    newCtrlMap := make(map[int]float32)
+    newCtrlMap[CTRL_TYPE_LATENCY] = 250 * 1000
+    newCtrlMap[CTRL_TYPE_LOSS] = 20
+    newCtrlMap[CTRL_TYPE_DUPLICATE] = 30
+    newCtrlMap[CTRL_TYPE_DUPLICATE_CORR] = 40
+    newCtrlMap[CTRL_TYPE_LOSS_CORR] = 50
+    newCtrlMap[CTRL_TYPE_JITTER] = 60
+    newCtrlMap[CTRL_TYPE_DELAY_CORR] = 70
+    newCtrlMap[CTRL_TYPE_REORDER_PROB] = 72
+    newCtrlMap[CTRL_TYPE_REORDER_CORR] = 75
+    newCtrlMap[CTRL_TYPE_CORRUPT_PROB] = 78
+    newCtrlMap[CTRL_TYPE_CORRUPT_CORR] = 85
+    newCtrlMap[CTRL_TYPE_LIMIT] = 90
+    newCtrlMap[CTRL_TYPE_GAP] = 1000
+
+    cNetem, err = ChangeFlowControlOnIface(ifaceName, newCtrlMap)
+    if err != nil {
+        t.Fatal("Failed to set flow control on iface", ifaceName, " :", err)
+    }
+
+    qdiscs, err = GetFlowControlList(ifaceName)
+    if err != nil {
+        t.Fatal("Could not retrieve flow control list in iface", ifaceName, " :", err)
+    }
+
+    if len(qdiscs) != 1 {
+        t.Fatal("Failed to add flow control correctly")
+    }
+    netem, ok = qdiscs[0].(*netlink.Netem)
+    if !ok {
+        t.Fatal("Qdisc type is wrong")
+    }
+    // Compare the record we got from the list with the one we created
+    if netem.Latency != cNetem.Latency {
+        t.Fatal("Latency does not match: expected", cNetem.Latency, "got", netem.Latency)
+    }
+    if netem.DelayCorr != cNetem.DelayCorr{
+        t.Fatal("DelayCorr does not match: expected", cNetem.DelayCorr, "got", netem.DelayCorr)
+    }
+    if netem.Limit != cNetem.Limit {
+        t.Fatal("Limit does not match: expected", cNetem.Limit, "got", netem.Limit)
+    }
+    if netem.Loss != cNetem.Loss {
+        t.Fatal("Loss does not match: expected", cNetem.Loss, "got", netem.Loss)
+    }
+    if netem.LossCorr != cNetem.LossCorr {
+        t.Fatal("LossCorr does not match: expected", cNetem.LossCorr, "got", netem.LossCorr)
+    }
+    if netem.Gap != cNetem.Gap {
+        t.Fatal("Gap does not match: expected", cNetem.Gap, "got", netem.Gap)
+    }
+    if netem.Duplicate != cNetem.Duplicate {
+        t.Fatal("Duplicate does not match: expected", cNetem.Duplicate, "got", netem.Duplicate)
+    }
+    if netem.DuplicateCorr != cNetem.DuplicateCorr {
+        t.Fatal("DuplicateCorr does not match: expected", cNetem.DuplicateCorr, "got", netem.DuplicateCorr)
+    }
+    if netem.Jitter != cNetem.Jitter {
+        t.Fatal("Jitter does not match: expected", cNetem.Jitter, "got", netem.Jitter)
+    }
+    if netem.ReorderProb != cNetem.ReorderProb {
+        t.Fatal("ReorderProb does not match: expected", cNetem.ReorderProb, "got", netem.ReorderProb)
+    }
+    if netem.ReorderCorr != cNetem.ReorderCorr {
+        t.Fatal("ReorderCorr does not match: expected", cNetem.ReorderCorr, "got", netem.ReorderCorr)
+    }
+    if netem.CorruptProb != cNetem.CorruptProb {
+        t.Fatal("CorruptProb does not match: expected", cNetem.CorruptProb, "got", netem.CorruptProb)
+    }
+    if netem.CorruptCorr != cNetem.CorruptCorr {
+        t.Fatal("CorruptCorr does not match: expected", cNetem.CorruptCorr, "got", netem.CorruptCorr)
+    }
+
+    // Cleanup 
+    if err := RemoveFlowControlOnIface(ifaceName); err != nil {
+        t.Fatal("Could not remove flow control from interface", ifaceName, " :", err)
     }
     qdiscs, err = GetFlowControlList(ifaceName)
     if err != nil {
-        t.Fatal(err)
+        t.Fatal("Could not retrieve flow control after deletion on interface", ifaceName, " :", err)
     }
     if len(qdiscs) != 0 {
-        t.Fatal("Failed to remove flow control")
+        t.Fatal("Failed to remove qdisc/flow control from interface", ifaceName, "after deletion")
     }
-
-	t.Logf("Test passed: Successfully changed flow control on iface %s", ifaceName)
+	t.Logf("Test passed: Successfully changed flow control on interface %s", ifaceName)
 }
 
