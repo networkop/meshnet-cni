@@ -11,6 +11,22 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
+const (
+    CTRL_TYPE_LATENCY = iota
+    CTRL_TYPE_LOSS
+    CTRL_TYPE_DUPLICATE
+    CTRL_TYPE_LOSS_CORR
+    CTRL_TYPE_JITTER
+    CTRL_TYPE_DELAY_CORR
+    CTRL_TYPE_REORDER_PROB
+    CTRL_TYPE_CORRUPT_PROB
+    CTRL_TYPE_CORRUPT_CORR
+)
+
+const (
+    CTRL_ADD = iota
+    CTRL_CHANGE
+)
 // Creat a veth pair in the current name space and set MTU. It does not make the links to be up
 func CreatVethPair(name string, peerName string, mtu int) error {
 
@@ -313,4 +329,180 @@ func setLinkIP(link netlink.Link, ipAddr net.IPNet) error {
 
 }
 
-//link, err := netlink.LinkByName(vethLinkName)
+// link, err := netlink.LinkByName(vethLinkName)
+
+// ifaceName: Interface name where delay is to be set. It must exist 
+// delay: how long a pkt to be delayed in us
+func AddFlowControlOnIface(ifaceName string, ctrlMap map[int]float32) (*netlink.Netem, error) {
+	link, err := netlink.LinkByName(ifaceName)
+	if err != nil {
+		fmt.Printf("Interface %s does not exist: %v\n", ifaceName, err)
+        return nil, err
+	}
+
+    return updateFlowControlOnLink(link, ctrlMap, CTRL_ADD)
+}
+
+//func AddFlowControlOnIface2(ifaceName string, ctrlType int, value float32) (*netlink.Netem, error) {
+//	link, err := netlink.LinkByName(ifaceName)
+//	if err != nil {
+//		fmt.Printf("Interface %s does not exist: %v\n", ifaceName, err)
+//        return nil, err
+//	}
+
+    //return updateFlowControlOnLink(link, ctrlType, value)
+//}
+
+func updateFlowControlOnLink(link netlink.Link, ctrlMap map[int]float32, update int) (*netlink.Netem, error) {
+    nattrs := netlink.NetemQdiscAttrs{}
+
+    qattrs := netlink.QdiscAttrs{
+                LinkIndex: link.Attrs().Index,
+                Handle:    netlink.MakeHandle(0xffff, 0),
+                Parent:    netlink.HANDLE_ROOT,
+    }
+
+    for key, value := range ctrlMap {
+        setCtrlValue(&nattrs, key, value)
+    }
+
+    netem := netlink.NewNetem(qattrs, nattrs)
+    if update == CTRL_ADD {
+        if err := netlink.QdiscAdd(netem); err != nil {
+		    fmt.Printf("Failed to add qdisc for flow control on link %d: %v\n", link.Attrs().Index, err)
+	        return netem, err
+        }
+    } else if update == CTRL_CHANGE {
+        if err := netlink.QdiscChange(netem); err != nil {
+		    fmt.Printf("Failed to change qdisc for flow control on link %d: %v\n", link.Attrs().Index, err)
+	        return netem, err
+        }
+    }
+	return netem, nil
+}
+
+func ChangeFlowControlOnIface(ifaceName string, ctrlMap map[int]float32) (*netlink.Netem, error) {
+	link, err := netlink.LinkByName(ifaceName)
+	if err != nil {
+		fmt.Printf("Interface %s does not exist: %v\n", ifaceName, err)
+        return nil, err
+	}
+
+    return updateFlowControlOnLink(link, ctrlMap, CTRL_CHANGE)
+}
+
+func AppendFlowControlOnIface2(ifaceName string, ctrlType int, value float32) (*netlink.Netem, error) {
+    var netem *netlink.Netem
+    var ok bool
+
+	link, err := netlink.LinkByName(ifaceName)
+	if err != nil {
+		fmt.Printf("Interface %s does not exist: %v\n", ifaceName, err)
+        return nil, err
+	}
+
+    qdiscs, err := GetFlowControlList(ifaceName)
+    if err == nil {
+        for _, qdisc := range qdiscs {
+            netem, ok = qdisc.(*netlink.Netem)
+            if ok {
+                break
+            }
+        }
+        if netem == nil {
+            //netem is not present, qdisc may be present with different type
+        }
+    }
+
+    return appendFlowControlOnLink(link, netem, ctrlType, value)
+}
+
+func appendFlowControlOnLink(link netlink.Link, netem *netlink.Netem, ctrlType int, value float32) (*netlink.Netem, error) {
+    var nattrs netlink.NetemQdiscAttrs
+
+    qattrs := netlink.QdiscAttrs{
+                LinkIndex: link.Attrs().Index,
+                Handle:    netlink.MakeHandle(0xffff, 0),
+                Parent:    netlink.HANDLE_ROOT,
+    }
+
+    if netem == nil {
+        nattrs = netlink.NetemQdiscAttrs{}
+    } else {
+        //netem exists. append new settings with existing settings
+        nattrs = netlink.NetemQdiscAttrs{
+                Latency:     netem.Latency,
+                Loss:        float32(netem.Loss),
+                Duplicate:   float32(netem.Duplicate),
+                LossCorr:    float32(netem.LossCorr),
+                Jitter:      netem.Jitter,
+                DelayCorr:   float32(netem.DelayCorr),
+                ReorderProb: float32(netem.ReorderProb),
+                CorruptProb: float32(netem.CorruptProb),
+                CorruptCorr: float32(netem.CorruptCorr),
+        }
+    }
+
+    //update latest config
+    setCtrlValue(&nattrs, ctrlType, value)
+
+    netem = netlink.NewNetem(qattrs, nattrs)
+    if err := netlink.QdiscChange(netem); err != nil {
+		fmt.Printf("Failed to change qdisc for control type %s on link %d\n", "todo", link.Attrs().Index)
+	    return netem, err
+    }
+	return netem, nil
+}
+
+func setCtrlValue(nattrs *netlink.NetemQdiscAttrs, ctrlType int, value float32) {
+    switch ctrlType {
+    case CTRL_TYPE_LATENCY:
+        nattrs.Latency = uint32(value)
+    case CTRL_TYPE_LOSS:
+        nattrs.Loss = value
+    case CTRL_TYPE_DUPLICATE:
+        nattrs.Duplicate = value
+    case CTRL_TYPE_LOSS_CORR:
+        nattrs.LossCorr = value
+    case CTRL_TYPE_JITTER:
+        nattrs.Jitter = uint32(value)
+    case CTRL_TYPE_DELAY_CORR:
+        nattrs.DelayCorr = value
+    case CTRL_TYPE_REORDER_PROB:
+        nattrs.ReorderProb = value
+    case CTRL_TYPE_CORRUPT_PROB:
+        nattrs.CorruptProb = value
+    case CTRL_TYPE_CORRUPT_CORR:
+        nattrs.CorruptCorr = value
+    default:
+        fmt.Printf("Unsupported flow control type %d\n", ctrlType)
+    }
+}
+
+func GetFlowControlList(ifaceName string) ([]netlink.Qdisc, error) {
+	link, err := netlink.LinkByName(ifaceName)
+	if err != nil {
+		fmt.Errorf("Interface %s does not exist: %v", ifaceName, err)
+        return nil, err
+	}
+    // return netlink.SafeQdiscList(link)
+    qdiscs, err := netlink.QdiscList(link)
+    if err != nil {
+        return nil, err
+    }
+    result := []netlink.Qdisc{}
+    for _, qdisc := range qdiscs {
+        // fmt.Printf("%+v\n", qdisc)
+        // filter default qdisc created by kernel when custom one deleted
+        attrs := qdisc.Attrs()
+        if attrs.Handle == netlink.HANDLE_NONE && attrs.Parent == netlink.HANDLE_ROOT {
+            continue
+        }
+        result = append(result, qdisc)
+    }
+    return result, nil
+}
+
+func DelFlowControl(qdisc netlink.Qdisc) error {
+    return netlink.QdiscDel(qdisc)
+}
