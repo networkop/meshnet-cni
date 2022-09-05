@@ -100,6 +100,13 @@ func saveInterNodeLinkConf() error {
 	return ioutil.WriteFile(interNodeLinkConf, []byte(os.Getenv("INTER_NODE_LINK_TYPE")), os.FileMode(06444))
 }
 
+func removeInterNodeLinkConf() error {
+	if err := os.Remove(interNodeLinkConf); err != nil {
+		return fmt.Errorf("failed to remove %s: %v", interNodeLinkConf, err)
+	}
+	return nil
+}
+
 // Init installs meshnet CNI configuration
 func Init() error {
 
@@ -130,5 +137,8 @@ func Init() error {
 func Cleanup() {
 	if err := os.Remove(meshnetCNIPath); err != nil {
 		log.Infof("Failed to remove file %s: %v", meshnetCNIPath, err)
+	}
+	if err := removeInterNodeLinkConf(); err != nil {
+		log.Infof("Failed to remove inter node link conf: %v", err)
 	}
 }
