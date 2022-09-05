@@ -358,7 +358,10 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 	/* Utilizing google gopacket for polling for packets from the node. This seems to be the
 	   simplest way to get all packets.
 	   As an alternative to google gopacket(pcap), a socket based implementation is possible.
-	   Not sure if socket based implementation can bring any advantage or not.  */
+	   Not sure if socket based implementation can bring any advantage or not.
+
+	   Near term will replace pcap by socket.
+	*/
 	wrHandle, err := pcap.OpenLive(hostEndVeth.LinkName, 65365, true, pcap.BlockForever)
 	if err != nil {
 		log.Fatalf("Could not open interface for sed/recv packets for containers. error:%v", err)
@@ -376,6 +379,13 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 	pktBuffSz := int32(1024 * 64)
 
 	url := strings.TrimSpace(fmt.Sprintf("%s:%s", wire.PeerPodIP, defaultPort))
+	/* Utilizing google gopacket for polling for packets from the node. This seems to be the
+	   simplest way to get all packets.
+	   As an alternative to google gopacket(pcap), a socket based implementation is possible.
+	   Not sure if socket based implementation can bring any advantage or not.
+
+	   Near term will replace pcap by socket.
+	*/
 	rdHandl, err := pcap.OpenLive(wire.LocalNodeIfaceName, pktBuffSz, true, pcap.BlockForever)
 	if err != nil {
 		log.Fatalf("Receive Thread for local pod failed to open interface: %s, PCAP ERROR: %v", wire.LocalNodeIfaceName, err)
