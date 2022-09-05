@@ -475,6 +475,8 @@ func SetInterNodeLinkType() {
 	b, err := os.ReadFile("/etc/cni/net.d/meshnet-inter-node-link-type")
 	if err != nil {
 		log.Warningf("Could not read iner node link type: %v", err)
+		// use the default value
+		return
 	}
 
 	interNodeLinkType = string(b)
