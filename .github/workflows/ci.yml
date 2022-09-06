@@ -16,7 +16,11 @@ jobs:
         with:
           go-version: 1.17.x
       - uses: actions/checkout@v2
-      - run: make test
+      
+      - name: install-deps
+        run: sudo apt-get install libpcap-dev 
+      - name: run go test
+        run: make test
 
   e2e:
     runs-on: ubuntu-latest
