@@ -39,6 +39,9 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
+            - name: INTER_NODE_LINK_TYPE
+              #value: GRPC
+              value: VXLAN
           volumeMounts:
             - name: cni-cfg
               mountPath: /etc/cni/net.d

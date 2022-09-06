@@ -28,13 +28,14 @@ local-build:
 ## Build the docker image
 docker:
 	@echo 'Creating docker image ${DOCKER_IMAGE}:${COMMIT}'
-	@docker buildx create --use --name=multiarch --node multiarch && \
+	docker buildx create --use --name=multiarch --driver-opt network=host --buildkitd-flags '--allow-insecure-entitlement network.host' --node multiarch && \
 	docker buildx build --load \
-	  --build-arg LDFLAGS=${LDFLAGS} \
-	  --platform "linux/amd64" \
-	  --tag ${DOCKER_IMAGE}:${COMMIT} \
-	  -f docker/Dockerfile \
-	  .
+	--build-arg LDFLAGS=${LDFLAGS} \
+	--platform "linux/amd64" \
+	--tag ${DOCKER_IMAGE}:${COMMIT} \
+	-f docker/Dockerfile \
+	.
+
 
 .PHONY: release
 ## Release the current code with git tag and `latest`
@@ -76,12 +77,20 @@ wait-for-meshnet:
 .PHONY: install
 ## Install meshnet into a test cluster
 install: kind-load kind-wait-for-cni kustomize kind-connect
-	kustomize build manifests/overlays/e2e  | kubectl apply -f -
+ifdef grpc
+	kustomize build manifests/overlays/grpc-link-e2e  | kubectl apply -f -
+else
+	kustomize build manifests/overlays/e2e | kubectl apply -f -
+endif
 
 .PHONY: uninstall
 ## Uninstall meshnet from a test cluster
 uninstall: kind-connect
-	-kustomize build manifests/overlays/e2e  | kubectl delete -f -
+ifdef grpc
+	-kustomize build manifests/overlays/grpc-link-e2e  | kubectl delete -f -
+else
+	-kustomize build manifests/overlays/e2e | kubectl delete -f -
+endif
 
 github-ci: kust-ensure build clean local upload install e2e
 

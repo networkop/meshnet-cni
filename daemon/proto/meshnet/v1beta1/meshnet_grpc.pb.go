@@ -27,6 +27,13 @@ type LocalClient interface {
 	SkipReverse(ctx context.Context, in *SkipQuery, opts ...grpc.CallOption) (*BoolResponse, error)
 	Skip(ctx context.Context, in *SkipQuery, opts ...grpc.CallOption) (*BoolResponse, error)
 	IsSkipped(ctx context.Context, in *SkipQuery, opts ...grpc.CallOption) (*BoolResponse, error)
+	GRPCWireExists(ctx context.Context, in *WireDef, opts ...grpc.CallOption) (*WireCreateResponse, error)
+	AddGRPCWireLocal(ctx context.Context, in *WireDef, opts ...grpc.CallOption) (*BoolResponse, error)
+	RemGRPCWire(ctx context.Context, in *WireDef, opts ...grpc.CallOption) (*BoolResponse, error)
+	// A node is going to hold multiple veth to connect to multiple containers.
+	// Each veth name must be unique with in a node. Daemon generates an ID that
+	// is unique in this node.
+	GenerateNodeInterfaceName(ctx context.Context, in *GenerateNodeInterfaceNameRequest, opts ...grpc.CallOption) (*GenerateNodeInterfaceNameResponse, error)
 }
 
 type localClient struct {
@@ -82,6 +89,42 @@ func (c *localClient) IsSkipped(ctx context.Context, in *SkipQuery, opts ...grpc
 	return out, nil
 }
 
+func (c *localClient) GRPCWireExists(ctx context.Context, in *WireDef, opts ...grpc.CallOption) (*WireCreateResponse, error) {
+	out := new(WireCreateResponse)
+	err := c.cc.Invoke(ctx, "/meshnet.v1beta1.Local/GRPCWireExists", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *localClient) AddGRPCWireLocal(ctx context.Context, in *WireDef, opts ...grpc.CallOption) (*BoolResponse, error) {
+	out := new(BoolResponse)
+	err := c.cc.Invoke(ctx, "/meshnet.v1beta1.Local/AddGRPCWireLocal", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *localClient) RemGRPCWire(ctx context.Context, in *WireDef, opts ...grpc.CallOption) (*BoolResponse, error) {
+	out := new(BoolResponse)
+	err := c.cc.Invoke(ctx, "/meshnet.v1beta1.Local/RemGRPCWire", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *localClient) GenerateNodeInterfaceName(ctx context.Context, in *GenerateNodeInterfaceNameRequest, opts ...grpc.CallOption) (*GenerateNodeInterfaceNameResponse, error) {
+	out := new(GenerateNodeInterfaceNameResponse)
+	err := c.cc.Invoke(ctx, "/meshnet.v1beta1.Local/GenerateNodeInterfaceName", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LocalServer is the server API for Local service.
 // All implementations must embed UnimplementedLocalServer
 // for forward compatibility
@@ -91,6 +134,13 @@ type LocalServer interface {
 	SkipReverse(context.Context, *SkipQuery) (*BoolResponse, error)
 	Skip(context.Context, *SkipQuery) (*BoolResponse, error)
 	IsSkipped(context.Context, *SkipQuery) (*BoolResponse, error)
+	GRPCWireExists(context.Context, *WireDef) (*WireCreateResponse, error)
+	AddGRPCWireLocal(context.Context, *WireDef) (*BoolResponse, error)
+	RemGRPCWire(context.Context, *WireDef) (*BoolResponse, error)
+	// A node is going to hold multiple veth to connect to multiple containers.
+	// Each veth name must be unique with in a node. Daemon generates an ID that
+	// is unique in this node.
+	GenerateNodeInterfaceName(context.Context, *GenerateNodeInterfaceNameRequest) (*GenerateNodeInterfaceNameResponse, error)
 	mustEmbedUnimplementedLocalServer()
 }
 
@@ -112,6 +162,18 @@ func (UnimplementedLocalServer) Skip(context.Context, *SkipQuery) (*BoolResponse
 }
 func (UnimplementedLocalServer) IsSkipped(context.Context, *SkipQuery) (*BoolResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method IsSkipped not implemented")
+}
+func (UnimplementedLocalServer) GRPCWireExists(context.Context, *WireDef) (*WireCreateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GRPCWireExists not implemented")
+}
+func (UnimplementedLocalServer) AddGRPCWireLocal(context.Context, *WireDef) (*BoolResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddGRPCWireLocal not implemented")
+}
+func (UnimplementedLocalServer) RemGRPCWire(context.Context, *WireDef) (*BoolResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemGRPCWire not implemented")
+}
+func (UnimplementedLocalServer) GenerateNodeInterfaceName(context.Context, *GenerateNodeInterfaceNameRequest) (*GenerateNodeInterfaceNameResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GenerateNodeInterfaceName not implemented")
 }
 func (UnimplementedLocalServer) mustEmbedUnimplementedLocalServer() {}
 
@@ -216,6 +278,78 @@ func _Local_IsSkipped_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Local_GRPCWireExists_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WireDef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LocalServer).GRPCWireExists(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/meshnet.v1beta1.Local/GRPCWireExists",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LocalServer).GRPCWireExists(ctx, req.(*WireDef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Local_AddGRPCWireLocal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WireDef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LocalServer).AddGRPCWireLocal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/meshnet.v1beta1.Local/AddGRPCWireLocal",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LocalServer).AddGRPCWireLocal(ctx, req.(*WireDef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Local_RemGRPCWire_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WireDef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LocalServer).RemGRPCWire(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/meshnet.v1beta1.Local/RemGRPCWire",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LocalServer).RemGRPCWire(ctx, req.(*WireDef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Local_GenerateNodeInterfaceName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GenerateNodeInterfaceNameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LocalServer).GenerateNodeInterfaceName(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/meshnet.v1beta1.Local/GenerateNodeInterfaceName",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LocalServer).GenerateNodeInterfaceName(ctx, req.(*GenerateNodeInterfaceNameRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Local_ServiceDesc is the grpc.ServiceDesc for Local service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -243,6 +377,22 @@ var Local_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "IsSkipped",
 			Handler:    _Local_IsSkipped_Handler,
 		},
+		{
+			MethodName: "GRPCWireExists",
+			Handler:    _Local_GRPCWireExists_Handler,
+		},
+		{
+			MethodName: "AddGRPCWireLocal",
+			Handler:    _Local_AddGRPCWireLocal_Handler,
+		},
+		{
+			MethodName: "RemGRPCWire",
+			Handler:    _Local_RemGRPCWire_Handler,
+		},
+		{
+			MethodName: "GenerateNodeInterfaceName",
+			Handler:    _Local_GenerateNodeInterfaceName_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "daemon/proto/meshnet/v1beta1/meshnet.proto",
@@ -253,6 +403,7 @@ var Local_ServiceDesc = grpc.ServiceDesc{
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RemoteClient interface {
 	Update(ctx context.Context, in *RemotePod, opts ...grpc.CallOption) (*BoolResponse, error)
+	AddGRPCWireRemote(ctx context.Context, in *WireDef, opts ...grpc.CallOption) (*WireCreateResponse, error)
 }
 
 type remoteClient struct {
@@ -272,11 +423,21 @@ func (c *remoteClient) Update(ctx context.Context, in *RemotePod, opts ...grpc.C
 	return out, nil
 }
 
+func (c *remoteClient) AddGRPCWireRemote(ctx context.Context, in *WireDef, opts ...grpc.CallOption) (*WireCreateResponse, error) {
+	out := new(WireCreateResponse)
+	err := c.cc.Invoke(ctx, "/meshnet.v1beta1.Remote/AddGRPCWireRemote", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RemoteServer is the server API for Remote service.
 // All implementations must embed UnimplementedRemoteServer
 // for forward compatibility
 type RemoteServer interface {
 	Update(context.Context, *RemotePod) (*BoolResponse, error)
+	AddGRPCWireRemote(context.Context, *WireDef) (*WireCreateResponse, error)
 	mustEmbedUnimplementedRemoteServer()
 }
 
@@ -286,6 +447,9 @@ type UnimplementedRemoteServer struct {
 
 func (UnimplementedRemoteServer) Update(context.Context, *RemotePod) (*BoolResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Update not implemented")
+}
+func (UnimplementedRemoteServer) AddGRPCWireRemote(context.Context, *WireDef) (*WireCreateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddGRPCWireRemote not implemented")
 }
 func (UnimplementedRemoteServer) mustEmbedUnimplementedRemoteServer() {}
 
@@ -318,6 +482,24 @@ func _Remote_Update_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Remote_AddGRPCWireRemote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WireDef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RemoteServer).AddGRPCWireRemote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/meshnet.v1beta1.Remote/AddGRPCWireRemote",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RemoteServer).AddGRPCWireRemote(ctx, req.(*WireDef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Remote_ServiceDesc is the grpc.ServiceDesc for Remote service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -329,7 +511,168 @@ var Remote_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "Update",
 			Handler:    _Remote_Update_Handler,
 		},
+		{
+			MethodName: "AddGRPCWireRemote",
+			Handler:    _Remote_AddGRPCWireRemote_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
+	Metadata: "daemon/proto/meshnet/v1beta1/meshnet.proto",
+}
+
+// WireProtocolClient is the client API for WireProtocol service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type WireProtocolClient interface {
+	SendToOnce(ctx context.Context, in *Packet, opts ...grpc.CallOption) (*BoolResponse, error)
+	SendToStream(ctx context.Context, opts ...grpc.CallOption) (WireProtocol_SendToStreamClient, error)
+}
+
+type wireProtocolClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewWireProtocolClient(cc grpc.ClientConnInterface) WireProtocolClient {
+	return &wireProtocolClient{cc}
+}
+
+func (c *wireProtocolClient) SendToOnce(ctx context.Context, in *Packet, opts ...grpc.CallOption) (*BoolResponse, error) {
+	out := new(BoolResponse)
+	err := c.cc.Invoke(ctx, "/meshnet.v1beta1.WireProtocol/SendToOnce", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *wireProtocolClient) SendToStream(ctx context.Context, opts ...grpc.CallOption) (WireProtocol_SendToStreamClient, error) {
+	stream, err := c.cc.NewStream(ctx, &WireProtocol_ServiceDesc.Streams[0], "/meshnet.v1beta1.WireProtocol/SendToStream", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &wireProtocolSendToStreamClient{stream}
+	return x, nil
+}
+
+type WireProtocol_SendToStreamClient interface {
+	Send(*Packet) error
+	CloseAndRecv() (*BoolResponse, error)
+	grpc.ClientStream
+}
+
+type wireProtocolSendToStreamClient struct {
+	grpc.ClientStream
+}
+
+func (x *wireProtocolSendToStreamClient) Send(m *Packet) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *wireProtocolSendToStreamClient) CloseAndRecv() (*BoolResponse, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(BoolResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// WireProtocolServer is the server API for WireProtocol service.
+// All implementations must embed UnimplementedWireProtocolServer
+// for forward compatibility
+type WireProtocolServer interface {
+	SendToOnce(context.Context, *Packet) (*BoolResponse, error)
+	SendToStream(WireProtocol_SendToStreamServer) error
+	mustEmbedUnimplementedWireProtocolServer()
+}
+
+// UnimplementedWireProtocolServer must be embedded to have forward compatible implementations.
+type UnimplementedWireProtocolServer struct {
+}
+
+func (UnimplementedWireProtocolServer) SendToOnce(context.Context, *Packet) (*BoolResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendToOnce not implemented")
+}
+func (UnimplementedWireProtocolServer) SendToStream(WireProtocol_SendToStreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method SendToStream not implemented")
+}
+func (UnimplementedWireProtocolServer) mustEmbedUnimplementedWireProtocolServer() {}
+
+// UnsafeWireProtocolServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to WireProtocolServer will
+// result in compilation errors.
+type UnsafeWireProtocolServer interface {
+	mustEmbedUnimplementedWireProtocolServer()
+}
+
+func RegisterWireProtocolServer(s grpc.ServiceRegistrar, srv WireProtocolServer) {
+	s.RegisterService(&WireProtocol_ServiceDesc, srv)
+}
+
+func _WireProtocol_SendToOnce_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Packet)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WireProtocolServer).SendToOnce(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/meshnet.v1beta1.WireProtocol/SendToOnce",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WireProtocolServer).SendToOnce(ctx, req.(*Packet))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WireProtocol_SendToStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(WireProtocolServer).SendToStream(&wireProtocolSendToStreamServer{stream})
+}
+
+type WireProtocol_SendToStreamServer interface {
+	SendAndClose(*BoolResponse) error
+	Recv() (*Packet, error)
+	grpc.ServerStream
+}
+
+type wireProtocolSendToStreamServer struct {
+	grpc.ServerStream
+}
+
+func (x *wireProtocolSendToStreamServer) SendAndClose(m *BoolResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *wireProtocolSendToStreamServer) Recv() (*Packet, error) {
+	m := new(Packet)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// WireProtocol_ServiceDesc is the grpc.ServiceDesc for WireProtocol service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var WireProtocol_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "meshnet.v1beta1.WireProtocol",
+	HandlerType: (*WireProtocolServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "SendToOnce",
+			Handler:    _WireProtocol_SendToOnce_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SendToStream",
+			Handler:       _WireProtocol_SendToStream_Handler,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "daemon/proto/meshnet/v1beta1/meshnet.proto",
 }

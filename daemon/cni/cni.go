@@ -17,6 +17,7 @@ import (
 const (
 	defaultNetDir     = "/etc/cni/net.d"
 	defaultCNIFile    = "00-meshnet.conflist"
+	interNodeLinkConf = "/etc/cni/net.d/meshnet-inter-node-link-type"
 	defaultPluginName = "meshnet"
 )
 
@@ -95,6 +96,17 @@ func saveConfList(m map[string]interface{}) error {
 	return ioutil.WriteFile(meshnetCNIPath, bytes, os.FileMode(06444))
 }
 
+func saveInterNodeLinkConf() error {
+	return ioutil.WriteFile(interNodeLinkConf, []byte(os.Getenv("INTER_NODE_LINK_TYPE")), os.FileMode(06444))
+}
+
+func removeInterNodeLinkConf() error {
+	if err := os.Remove(interNodeLinkConf); err != nil {
+		return fmt.Errorf("failed to remove %s: %v", interNodeLinkConf, err)
+	}
+	return nil
+}
+
 // Init installs meshnet CNI configuration
 func Init() error {
 
@@ -113,6 +125,11 @@ func Init() error {
 
 	conf["plugins"] = plugins
 
+	// TODO: check if we can avoid creating a custom file for propagating value of env INTER_NODE_LINK_TYPE
+	if err := saveInterNodeLinkConf(); err != nil {
+		return err
+	}
+
 	return saveConfList(conf)
 }
 
@@ -120,5 +137,8 @@ func Init() error {
 func Cleanup() {
 	if err := os.Remove(meshnetCNIPath); err != nil {
 		log.Infof("Failed to remove file %s: %v", meshnetCNIPath, err)
+	}
+	if err := removeInterNodeLinkConf(); err != nil {
+		log.Infof("Failed to remove inter node link conf: %v", err)
 	}
 }

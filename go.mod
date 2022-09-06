@@ -11,23 +11,24 @@ require (
 	github.com/redhat-nfvpe/koko v0.0.0-20210415181932-a18aa44814ea
 	github.com/sirupsen/logrus v1.8.1
 	github.com/vishvananda/netlink v1.1.1-0.20201029203352-d40f9887b852
-	google.golang.org/grpc v1.38.0
-	google.golang.org/protobuf v1.26.0
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	google.golang.org/grpc v1.47.0
+	google.golang.org/protobuf v1.28.0
 	k8s.io/apimachinery v0.21.1
 	k8s.io/client-go v0.21.1
 )
+
+require github.com/google/gopacket v1.1.19
 
 require (
 	github.com/Microsoft/go-winio v0.4.11 // indirect
 	github.com/docker/distribution v0.0.0-20181024170156-93e082742a00 // indirect
 	github.com/docker/docker v0.0.0-20181024220401-bc4c1c238b55 // indirect
 	github.com/docker/go-connections v0.0.0-20180228141015-7395e3f8aa16 // indirect
-	github.com/docker/go-units v0.0.0-20180212134657-47565b4f722f // indirect
+	github.com/docker/go-units v0.4.0 // indirect
 	github.com/go-logr/logr v0.4.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/protobuf v1.5.0 // indirect
-	github.com/google/go-cmp v0.5.5 // indirect
+	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/googleapis/gnostic v0.4.1 // indirect
 	github.com/imdario/mergo v0.3.5 // indirect
@@ -38,15 +39,18 @@ require (
 	github.com/opencontainers/image-spec v0.0.0-20171030174740-d60099175f88 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/stretchr/testify v1.7.4 // indirect
 	github.com/vishvananda/netns v0.0.0-20200728191858-db3c7e526aae // indirect
-	golang.org/x/net v0.0.0-20210224082022-3d97a244fca7 // indirect
+	golang.org/x/net v0.0.0-20220708220712-1185a9018129 // indirect
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d // indirect
-	golang.org/x/sys v0.0.0-20210225134936-a50acf3fe073 // indirect
-	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d // indirect
-	golang.org/x/text v0.3.4 // indirect
+	golang.org/x/sys v0.0.0-20220712014510-0a85c31ab51e // indirect
+	golang.org/x/term v0.0.0-20220526004731-065cf7ba2467 // indirect
+	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba // indirect
+	golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f // indirect
 	google.golang.org/appengine v1.6.5 // indirect
-	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
+	google.golang.org/genproto v0.0.0-20220714211235-042d03aeabc9 // indirect
+	gopkg.in/check.v1 v1.0.0-20200902074654-038fdea0a05b // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/api v0.21.1 // indirect
@@ -58,3 +62,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.1.0 // indirect
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
+
+replace github.com/networkop/meshnet-cni => ./

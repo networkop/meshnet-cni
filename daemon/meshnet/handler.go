@@ -2,8 +2,10 @@ package meshnet
 
 import (
 	"context"
+	"net"
 	"os"
 
+	"github.com/networkop/meshnet-cni/daemon/grpcwire"
 	"github.com/networkop/meshnet-cni/daemon/vxlan"
 
 	log "github.com/sirupsen/logrus"
@@ -11,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/util/retry"
 
+	"github.com/google/gopacket/pcap"
 	mpb "github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
 )
 
@@ -249,4 +252,119 @@ func (m *Meshnet) Update(ctx context.Context, pod *mpb.RemotePod) (*mpb.BoolResp
 		return &mpb.BoolResponse{Response: false}, nil
 	}
 	return &mpb.BoolResponse{Response: true}, nil
+}
+
+//------------------------------------------------------------------------------------------------------
+func (m *Meshnet) RemGRPCWire(ctx context.Context, wireDef *mpb.WireDef) (*mpb.BoolResponse, error) {
+
+	if err := grpcwire.DeleteWiresByPod(wireDef.KubeNs, wireDef.LocalPodName); err != nil {
+
+		return &mpb.BoolResponse{Response: false}, err
+	}
+	return &mpb.BoolResponse{Response: true}, nil
+}
+
+//------------------------------------------------------------------------------------------------------
+func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*mpb.BoolResponse, error) {
+
+	locInf, err := net.InterfaceByName(wireDef.VethNameLocalHost)
+	if err != nil {
+		log.Errorf("Failed to retrieve interface ID for interface %v. error:%v", wireDef.VethNameLocalHost, err)
+		return &mpb.BoolResponse{Response: false}, err
+	}
+
+	//Using google gopacket for packet receive. An alternative could be using socket. Not sure it it provides any advantage over gopacket.
+	wrHandle, err := pcap.OpenLive(wireDef.VethNameLocalHost, 65365, true, pcap.BlockForever)
+	if err != nil {
+		log.Fatalf("Could not open interface for send/recv packets for containers. error:%v", err)
+		return &mpb.BoolResponse{Response: false}, err
+	}
+
+	aWire := grpcwire.GRPCWire{
+		UID: int(wireDef.LinkUid),
+
+		LocalNodeIfaceID:   int64(locInf.Index),
+		LocalNodeIfaceName: wireDef.VethNameLocalHost,
+		LocalPodIP:         wireDef.LocalPodIp,
+		LocalPodIfaceName:  wireDef.IntfNameInPod,
+		LocalPodName:       wireDef.LocalPodName,
+		LocalPodNetNS:      wireDef.LocalPodNetNs,
+
+		PeerIfaceID: wireDef.PeerIntfId,
+		PeerPodIP:   wireDef.PeerIp,
+
+		Originator:   grpcwire.HOST_CREATED_WIRE,
+		OriginatorIP: "unknown", /*+++todo retrieve host ip and set it here. Needed only for debugging */
+
+		StopC:     make(chan struct{}),
+		Namespace: wireDef.KubeNs,
+	}
+
+	grpcwire.AddWire(&aWire, wrHandle)
+
+	log.Infof("Starting the local packet receive thread for pod interface %s", wireDef.IntfNameInPod)
+	// TODO: handle error here
+	go grpcwire.RecvFrmLocalPodThread(&aWire)
+
+	return &mpb.BoolResponse{Response: true}, nil
+}
+
+//------------------------------------------------------------------------------------------------------
+func (m *Meshnet) SendToOnce(ctx context.Context, pkt *mpb.Packet) (*mpb.BoolResponse, error) {
+
+	wrHandle, err := grpcwire.GetHostIntfHndl(pkt.RemotIntfId)
+	if err != nil {
+		log.Printf("SendToOnce (wire id - %v): Could not find local handle. err:%v", pkt.RemotIntfId, err)
+		return &mpb.BoolResponse{Response: false}, err
+	}
+
+	// In case any per packet log need to be generated.
+	// pktType := grpcwire.DecodePkt(pkt.Frame)
+	// log.Printf("Daemon(SendToOnce): Received [pkt: %s, bytes: %d, for local interface id: %d]. Sending it to local container", pktType, len(pkt.Frame), pkt.RemotIntfId)
+	// log.Printf("Daemon(SendToOnce): Received [bytes: %d, for local interface id: %d]. Sending it to local container", len(pkt.Frame), pkt.RemotIntfId)
+
+	err = wrHandle.WritePacketData(pkt.Frame)
+	if err != nil {
+		log.Printf("SendToOnce (wire id - %v): Could not write packet(%d bytes) to local interface. err:%v", pkt.RemotIntfId, len(pkt.Frame), err)
+		return &mpb.BoolResponse{Response: false}, err
+	}
+
+	return &mpb.BoolResponse{Response: true}, nil
+}
+
+//---------------------------------------------------------------------------------------------------------------
+func (m *Meshnet) AddGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (*mpb.WireCreateResponse, error) {
+
+	stopC := make(chan struct{})
+	wire, err := grpcwire.CreateGRPCWireRemoteTriggered(wireDef, stopC)
+
+	if err == nil {
+		// TODO: handle error here
+		go grpcwire.RecvFrmLocalPodThread(wire)
+
+		return &mpb.WireCreateResponse{Response: true, PeerIntfId: wire.LocalNodeIfaceID}, nil
+	}
+	log.Errorf("AddWireRemote err : %v", err)
+	return &mpb.WireCreateResponse{Response: false, PeerIntfId: wire.LocalNodeIfaceID}, err
+}
+
+//---------------------------------------------------------------------------------------------------------------
+// GRPCWireExists will return the wire if it exists.
+func (m *Meshnet) GRPCWireExists(ctx context.Context, wireDef *mpb.WireDef) (*mpb.WireCreateResponse, error) {
+	wire, ok := grpcwire.GetWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid))
+	if !ok || wire == nil {
+		return &mpb.WireCreateResponse{Response: false, PeerIntfId: 0}, nil
+	}
+	return &mpb.WireCreateResponse{Response: ok, PeerIntfId: wire.PeerIfaceID}, nil
+}
+
+//---------------------------------------------------------------------------------------------------------------
+// Given the pod name and the pod interface, GenerateNodeInterfaceName generates the corresponding interface name in the node.
+// This pod interface and the node interface later become the two end of a veth-pair
+func (m *Meshnet) GenerateNodeInterfaceName(ctx context.Context, in *mpb.GenerateNodeInterfaceNameRequest) (*mpb.GenerateNodeInterfaceNameResponse, error) {
+	locIfNm, err := grpcwire.GenNodeIfaceName(in.PodName, in.PodIntfName)
+	if err != nil {
+		return &mpb.GenerateNodeInterfaceNameResponse{Ok: false, NodeIntfName: ""}, err
+	}
+	return &mpb.GenerateNodeInterfaceNameResponse{Ok: true, NodeIntfName: locIfNm}, nil
 }

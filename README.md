@@ -21,6 +21,7 @@
 The goal of this plugin is to interconnect pods via direct point-to-point links according to a pre-define topology. To do that, the plugin uses three types of links:
 * **veth** - used to connect two pods running on the same host
 * **vxlan** - used to connected two pods running on different hosts
+  * Optionally users can opt in to use **gRPC** instead, for this use case. Check [Installation](#Installation).
 * **macvlan** - used to connect to external resources, i.e. any physical or virtual device outside of the Kubernetes cluster
 
 Topology information, represented as a list of links per pod, is stored in k8s's etcd datastore as custom resources:
@@ -88,7 +89,7 @@ The plugin consists of three main components:
 
 * **datastore** - a k8s native etcd backend cluster storing topology information and runtime pod metadata (e.g. pod IP address and NetNS)
 * **meshnet** - a CNI binary responsible for pod's network configuration
-* **meshnetd** - a daemon responsible for communication with k8s and vxlan link configuration updates
+* **meshnetd** - a daemon responsible for communication with k8s and vxlan (or grpc) link configuration updates
 
 ![architecture](arch_v0_2_0.png)
 
@@ -110,37 +111,40 @@ Below is the order of operation of the plugin from the perspective of kube-node-
 
 Clone this project and build a local 3-node Kubernetes cluster
 
-```
+```sh
 make up
 ```
 
 Build the meshnet-cni docker image
 
-```
+```sh
 make docker
 ```
 
 Install meshnet-cni plugin
 
-```
+```sh
+# install meshnet with VXLAN link
 make install
+# or install meshnet with gRPC link
+make grpc=1 install
 ```
 
 Verify that meshnet is up and `READY`
 
-```
+```sh
 kubectl get daemonset -n meshnet
 ```
 
 Install a 3-node test topology
 
-```
+```sh
 kubectl apply -f tests/3node.yml
 ```
 
 Check that all pods are running
 
-```
+```sh
 kubectl get pods -l test=3node                                                                  
 NAME   READY   STATUS    RESTARTS   AGE
 r1     1/1     Running   0          40m
@@ -150,7 +154,7 @@ r3     1/1     Running   0          40s
 
 Test connectivity between pods
 
-```
+```sh
 kubectl exec r1 -- ping -c 1 12.12.12.2
 kubectl exec r2 -- ping -c 1 23.23.23.3
 kubectl exec r3 -- ping -c 1 13.13.13.1
@@ -158,13 +162,13 @@ kubectl exec r3 -- ping -c 1 13.13.13.1
 
 Cleanup
 
-```
+```sh
 kubectl delete --grace-period=0 --force -f tests/3node.yml
 ```
 
 Destroy the local kind cluster
 
-```
+```sh
 make down
 ```
 
@@ -178,8 +182,11 @@ The following manifest will create all that's required for meshnet plugin to fun
 * A set of RBAC rules to allow meshnet to interact with new custom resources
 * A daemonset with meshnet plugin and configuration files
 
-```
+```sh
+# to install meshnet with VXLAN link
 kubectl apply -k manifests/base
+# to install meshnet with gRPC link
+kubectl apply -k manifests/overlays/grpc-link
 ```
 
 #### Interaction with existing resources

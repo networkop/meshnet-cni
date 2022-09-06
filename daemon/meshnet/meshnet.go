@@ -30,6 +30,7 @@ type Config struct {
 type Meshnet struct {
 	mpb.UnimplementedLocalServer
 	mpb.UnimplementedRemoteServer
+	mpb.UnimplementedWireProtocolServer
 	config  Config
 	kClient kubernetes.Interface
 	tClient topologyclientv1.Interface
@@ -82,6 +83,7 @@ func New(cfg Config) (*Meshnet, error) {
 	}
 	mpb.RegisterLocalServer(m.s, m)
 	mpb.RegisterRemoteServer(m.s, m)
+	mpb.RegisterWireProtocolServer(m.s, m)
 	reflection.Register(m.s)
 	return m, nil
 }
