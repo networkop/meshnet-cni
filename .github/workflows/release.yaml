@@ -21,7 +21,7 @@ jobs:
       -
         name: Install quemu emulators
         run: |
-          docker run -it --rm --privileged tonistiigi/binfmt --install all
+          docker run -td --rm --privileged tonistiigi/binfmt --install all
       - 
         name: Build and Push container images
         run: |
