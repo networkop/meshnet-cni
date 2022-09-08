@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    branches: [ master ]
+    
 
 
 jobs:
@@ -24,6 +24,10 @@ jobs:
           registry: docker.io
           username: ${{ secrets.DOCKER_USER }}
           password: ${{ secrets.DOCKER_PWD }}
+      -
+        name: Install quemu emulators
+        run: |
+          docker run -it --rm --privileged tonistiigi/binfmt --install all
       - 
         name: Build and Push container images
         run: |
