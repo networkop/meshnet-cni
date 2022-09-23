@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+    "time"
 	"strings"
 
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -12,6 +13,11 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+)
+
+const (
+    skipStatusRetryInterval = 2 // sec
+    skipStatusRetryCount    = 5
 )
 
 //--------------------------------------------------------------------------------------------------------
@@ -40,6 +46,11 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		return err
 	}
 
+    wireDef := mpb.WireDef{
+        LocalPodNetNs: localPod.NetNs,
+        LinkUid:       link.Uid,
+        KubeNs:        localPod.KubeNs,
+    }
 	// Comparing names to determine higher priority
 	higherPrio := localPod.Name > peerPod.Name
 
@@ -52,16 +63,52 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		this situation only high priority pod must create the tunnel and not the low priority one. This will
 		avoid conflict. */
 		log.Infof("Pod %s with link uid %d is not skipped. This pod has low priority. Peer pod %s will create this grpc-wire", localPod.Name, link.Uid, peerPod.Name)
-		return nil
+
+        ticker := time.NewTicker(time.Second * skipStatusRetryInterval)
+        defer ticker.Stop()
+
+        iteration := 0
+    	for _ = range ticker.C {
+            log.Infof("Retrying to read skipped status for pod %s", localPod.Name)
+            // Chek if it has created the wire while we were waiting
+            resp, err := localClient.GRPCWireExists(ctx, &wireDef)
+            if err != nil {
+                return fmt.Errorf("could not check grpc wire: %v", err)
+            }
+            if resp.Response {
+                /* While this pod was busy creating other links or was busy with some other task, the remote
+                   pod had finished creating this grpc-link.  */
+                log.Infof("This grpc wire is already set by the remote peer. Local interface id:%d", resp.PeerIntfId)
+                return nil
+            }
+
+            isSkipped, err = localClient.IsSkipped(ctx, &mpb.SkipQuery{
+                Pod:    localPod.Name,
+                Peer:   peerPod.Name,
+                KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
+            })
+            if err != nil {
+                log.Infof("Failed to read skipped status for pod %s", localPod.Name)
+                return err
+            }
+
+            if !isSkipped.Response {
+                log.Infof("Low priority pod %s created after the high priority peer is not skipped by high priority peer %s. This link is not created.", localPod.Name, peerPod.Name)
+                //log.Infof("Iteration for %s: %d", localPod.Name, iteration)
+                if iteration == skipStatusRetryCount {
+                    return fmt.Errorf("Low priority pod %s created after the high priority peer is not skipped by high priority peer %s. This link is not created."    , localPod.Name, peerPod.Name)
+                }
+		        iteration++
+                //log.Infof("after-Iteration for %s: %d", localPod.Name, iteration)
+            } else {
+                log.Infof("Local pod %s is skipped by peer %s. So we can create wire now", localPod.Name, peerPod.Name)
+                break
+            }
+        } // end of for 
 	}
 
 	//+++think : I have doubt, if this check for links existence is an overkill or not.
 	//           Anyway this is a creation time check done once for a link. Not expensive.
-	wireDef := mpb.WireDef{
-		LocalPodNetNs: localPod.NetNs,
-		LinkUid:       link.Uid,
-		KubeNs:        localPod.KubeNs,
-	}
 	resp, err := localClient.GRPCWireExists(ctx, &wireDef)
 	if err != nil {
 		return fmt.Errorf("could not check grpc wire: %v", err)
