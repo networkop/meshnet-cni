@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 echo "Distributing files"
 if [ -d "/opt/cni/bin/" ] && [ -f "./meshnet" ]; then

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net"
-    "time"
 	"strings"
+	"time"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	mpb "github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
@@ -16,8 +16,8 @@ import (
 )
 
 const (
-    skipStatusRetryInterval = 2 // sec
-    skipStatusRetryCount    = 5
+	skipStatusRetryInterval = 2 // sec
+	skipStatusRetryCount    = 5
 )
 
 //--------------------------------------------------------------------------------------------------------
@@ -30,11 +30,11 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		return fmt.Errorf("can't establish grpc channel. link not provided. link:%p", link)
 	}
 
-	log.Infof("Setting up grpc-wire:(local-pod:%s:%s@node:%s <----link uid: %d----> remote-pod:%s:%s@node:%s)",
-		localPod.Name, link.LocalIntf, localPod.SrcIp,
+	log.Infof("%s : Setting up grpc-wire:(local-pod:%s:%s@node:%s <----link uid: %d----> remote-pod:%s:%s@node:%s)",
+		localPod.Name, localPod.Name, link.LocalIntf, localPod.SrcIp,
 		link.Uid, peerPod.Name, link.PeerIntf, peerPod.SrcIp)
 
-	log.Infof("Checking if we've been skipped")
+	log.Infof("%s : Checking if we've been skipped", localPod.Name)
 	isSkipped, err := localClient.IsSkipped(ctx, &mpb.SkipQuery{
 		Pod:    localPod.Name,
 		Peer:   peerPod.Name,
@@ -69,8 +69,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 
 		iteration := 0
 		for _ = range ticker.C {
-			log.Infof("Retrying to read skipped status for pod %s", localPod.Name)
-			// Chek if it has created the wire while we were waiting
+			// Check if it has created the wire while we were waiting
 			resp, err := localClient.GRPCWireExists(ctx, &wireDef)
 			if err != nil {
 				return fmt.Errorf("could not check grpc wire: %v", err)
@@ -82,6 +81,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 				return nil
 			}
 
+			log.Infof("%s : Retrying to read skipped status for pod %s", localPod.Name, localPod.Name)
 			isSkipped, err = localClient.IsSkipped(ctx, &mpb.SkipQuery{
 				Pod:    localPod.Name,
 				Peer:   peerPod.Name,
@@ -93,20 +93,15 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 			}
 
 			if !isSkipped.Response {
-				log.Infof("Low priority pod %s created after the high priority peer is not skipped by high priority peer %s. This link is not created.", localPod.Name, peerPod.Name)
-				//log.Infof("Iteration for %s: %d", localPod.Name, iteration)
 				if iteration == skipStatusRetryCount {
-					return fmt.Errorf("Retry count exceeded to create wire by low priority pod %s when low priority pod is created after" +
-									  "the high priority peer %s and is not skipped by high priority peer. This link is not created.",
-									  localPod.Name, peerPod.Name)
+					return fmt.Errorf("%s : Could not read skip status in %d try. This link between %s adn %s not created.", localPod.Name, skipStatusRetryCount, localPod.Name, peerPod.Name)
 				}
 				iteration++
-				//log.Infof("after-Iteration for %s: %d", localPod.Name, iteration)
 			} else {
 				log.Infof("Local pod %s is skipped by peer %s. So we can create wire now", localPod.Name, peerPod.Name)
 				break
 			}
-		} // end of for 
+		} // end of for
 	}
 
 	//+++think : I have doubt, if this check for links existence is an overkill or not.

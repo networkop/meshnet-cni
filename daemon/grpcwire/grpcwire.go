@@ -251,7 +251,7 @@ func GetHostIntfHndl(intfID int64) (*pcap.Handle, error) {
 	if ok {
 		return val, nil
 	}
-	return nil, fmt.Errorf("interface %d is not active", intfID)
+	return nil, fmt.Errorf("node interface %d is not found in local db", intfID)
 
 }
 
@@ -334,7 +334,7 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 		log.Fatalf("Could not get interface index for %s. error:%v", hostEndVeth.LinkName, err)
 		return nil, err
 	}
-	log.Infof("On Remote Trigger: Successfully created vEth pair (in(name):%s <--> out(name-index):%s:%d).", inIfNm, outIfNm, locIface.Index)
+	log.Infof("On Remote Trigger from %s:%d : Successfully created vEth pair (in(name):%s <--> out(name)-index:%s:%d).", wireDef.PeerIp, wireDef.PeerIntfId, inIfNm, outIfNm, locIface.Index)
 	aWire := &GRPCWire{
 		UID: int(wireDef.LinkUid),
 
@@ -434,6 +434,7 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 			if len(data) > 1518 {
 				pktType := DecodePkt(payload.Frame)
 				log.Infof("Daemon(RecvFrmLocalPodThread): Dropping:unusually large packet received from local pod. size: %d, pkt:%s", len(data), pktType)
+				continue
 			}
 			ok, err := wireClient.SendToOnce(ctx, payload)
 			if err != nil || !ok.Response {
@@ -443,7 +444,10 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 					err = fmt.Errorf("RecvFrmLocalPodThread:Failed to send packet to remote. GRPC return code: false")
 					log.Infof("Daemon(RecvFrmLocalPodThread):err= %v", err)
 				}
+				/* +++ we generate the error and continue. As the above errors will happen when the remote end is not yet ready.
+				       It will eventually get ready and if it can not then some will stop this thread.
 				return err
+				*/
 			}
 		}
 	}
