@@ -432,10 +432,11 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 			This is a very unusual condition to receive an packet from the pod with size > MTU. This can only happens if
 			things gets really messed up.   */
 			if len(data) > 1518 {
-				pktType := DecodePkt(payload.Frame)
+				pktType := DecodeFrame(payload.Frame)
 				log.Infof("Daemon(RecvFrmLocalPodThread): Dropping:unusually large packet received from local pod. size: %d, pkt:%s", len(data), pktType)
 				continue
 			}
+
 			ok, err := wireClient.SendToOnce(ctx, payload)
 			if err != nil || !ok.Response {
 				if err != nil {
@@ -454,61 +455,113 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 }
 
 //------------------------------------------------------------------------------------------------------
-func DecodePkt(frame []byte) string {
-	pktType := "Unknown"
-
+func DecodeFrame(frame []byte) string {
+	pktTypeStr := "Unknown"
 	packet := gopacket.NewPacket(frame, layers.LayerTypeEthernet, gopacket.Default)
 	ethernetLayer := packet.Layer(layers.LayerTypeEthernet)
 	if ethernetLayer != nil {
 		ethernetPacket, _ := ethernetLayer.(*layers.Ethernet)
-		pktType = "Ethernet"
-		if ethernetPacket.EthernetType == 0x0800 {
-			pktType = pktType + ":IPv4"
-			ipLayer := packet.Layer(layers.LayerTypeIPv4)
-			if ipLayer != nil {
-				ipPacket, _ := ipLayer.(*layers.IPv4)
-				pktType = pktType + fmt.Sprintf("[s:%s, d:%s]", ipPacket.SrcIP.String(), ipPacket.DstIP.String())
-				if ipPacket.Protocol == 0x1 {
-					pktType = pktType + ":ICMP"
-				} else if ipPacket.Protocol == 0x6 {
-					pktType = pktType + "TCP"
-					tcpLayer := packet.Layer(layers.LayerTypeTCP)
-					if tcpLayer != nil {
-						tcpPkt := tcpLayer.(*layers.TCP)
-						if tcpPkt.DstPort == 179 {
-							pktType = pktType + ":BGP"
-						} else {
-							pktType = pktType + fmt.Sprintf("[Port:%d]", tcpPkt.DstPort)
-						}
-					}
-				} else {
-					pktType = fmt.Sprintf("IPv4 with protocol : %d", ipPacket.Protocol)
-				}
-			}
-		} else if ethernetPacket.EthernetType == 0x86DD {
-			pktType = "IPv6"
-		} else if ethernetPacket.EthernetType <= 1500 {
-			llcLayer := packet.Layer(layers.LayerTypeLLC)
-			if llcLayer != nil {
-				llcPacket, _ := llcLayer.(*layers.LLC)
-				if llcPacket.DSAP == 0xFE && llcPacket.SSAP == 0xFE && llcPacket.Control == 0x3 {
-					pktType = "LLC"
-					if llcPacket.Payload[0] == 0x83 {
-						pktType = "ISIS"
-					}
-				}
+		pktTypeStr = "Ethernet"
+		pktTypeStr += DecodePkt(packet, ethernetPacket.NextLayerType())
+	}
+	return pktTypeStr
+}
 
-			} else {
-				pktType = fmt.Sprintf("EthType = %d", ethernetPacket.EthernetType)
+func DecodePkt(packet gopacket.Packet, layerType gopacket.LayerType) string {
+	var pktTypeStr string
+
+	if layerType == layers.LayerTypeIPv4 {
+		pktTypeStr += decodeIPv4Pkt(packet)
+	} else if layerType== layers.LayerTypeIPv6 {
+		pktTypeStr += decodeIPv6Pkt(packet)
+	} else if layerType == layers.LayerTypeLLC {
+		llcLayer := packet.Layer(layers.LayerTypeLLC)
+		if llcLayer != nil {
+			pktTypeStr += ":LLC"
+			llcPacket, _ := llcLayer.(*layers.LLC)
+			if llcPacket.DSAP == 0xFE && llcPacket.SSAP == 0xFE && llcPacket.Control == 0x3 {
+				if llcPacket.Payload[0] == 0x83 {
+					pktTypeStr += ":ISIS"
+				}
 			}
-		} else if ethernetPacket.EthernetType == 0x0806 {
-			pktType = "ARP"
-		} else if (ethernetPacket.EthernetType == 0x8100) || (ethernetPacket.EthernetType == 0x88A8) {
-			pktType = "VLAN"
+		}
+	} else if layerType == layers.LayerTypeARP {
+		pktTypeStr += ":ARP"
+	} else if layerType == layers.LayerTypeDot1Q {
+		pktTypeStr += ":VLAN"
+		fmt.Printf("VLAN\n")
+		vlanLayer := packet.Layer(layers.LayerTypeDot1Q)
+		if vlanLayer != nil {
+			vlanPacket, _ := vlanLayer.(*layers.Dot1Q)
+			nextLayer := vlanPacket.NextLayerType()
+			if nextLayer == gopacket.LayerTypeZero {
+				// this may be LLC layer. try to match with known LLC 0xFEFE03
+				if vlanPacket.Payload[0] == 0xFE && vlanPacket.Payload[1] == 0xFE && vlanPacket.Payload[2] == 0x03 {
+					packet := gopacket.NewPacket(vlanPacket.Payload, layers.LayerTypeLLC, gopacket.Default)
+					pktTypeStr += DecodePkt(packet, layers.LayerTypeLLC)
+				}
+			} else {
+				packet := gopacket.NewPacket(vlanPacket.Payload, nextLayer, gopacket.Default)
+				pktTypeStr += DecodePkt(packet, nextLayer)
+			}
 		} else {
-			pktType = fmt.Sprintf("EthType = %d", ethernetPacket.EthernetType)
+			pktTypeStr += ":No VLAN Hdr"
 		}
 	}
 
-	return pktType
+	return pktTypeStr
+}
+
+func decodeIPv4Pkt(packet gopacket.Packet) string {
+	pktTypeStr := ":IPv4"
+	ipLayer := packet.Layer(layers.LayerTypeIPv4)
+	if ipLayer != nil {
+		ipPacket, _ := ipLayer.(*layers.IPv4)
+
+		pktTypeStr += fmt.Sprintf("[s:%s, d:%s]", ipPacket.SrcIP.String(), ipPacket.DstIP.String())
+		if ipPacket.Protocol == layers.IPProtocolICMPv4 {
+			pktTypeStr += ":ICMP"
+		} else if ipPacket.Protocol == layers.IPProtocolTCP {
+			pktTypeStr += ":TCP"
+			tcpLayer := packet.Layer(layers.LayerTypeTCP)
+			if tcpLayer != nil {
+				tcpPkt := tcpLayer.(*layers.TCP)
+				if tcpPkt.DstPort == 179 {
+					pktTypeStr += ":BGP"
+				} else {
+					pktTypeStr += fmt.Sprintf(":[Port:%d]", tcpPkt.DstPort)
+				}
+			}
+		} else {
+			pktTypeStr += fmt.Sprintf(":IPv4 with protocol : %d", ipPacket.Protocol)
+		}
+	}
+	return pktTypeStr
+}
+
+func decodeIPv6Pkt(packet gopacket.Packet) string {
+	pktTypeStr := ":IPv6"
+	ipLayer := packet.Layer(layers.LayerTypeIPv6)
+	if ipLayer != nil {
+		ipPacket, _ := ipLayer.(*layers.IPv6)
+
+		pktTypeStr += fmt.Sprintf("[s:%s, d:%s]", ipPacket.SrcIP.String(), ipPacket.DstIP.String())
+		if ipPacket.NextHeader == layers.IPProtocolICMPv6 {
+			pktTypeStr += ":ICMPv6"
+		} else if ipPacket.NextHeader == layers.IPProtocolTCP {
+			pktTypeStr += ":TCP"
+			tcpLayer := packet.Layer(layers.LayerTypeTCP)
+			if tcpLayer != nil {
+				tcpPkt := tcpLayer.(*layers.TCP)
+				if tcpPkt.DstPort == 179 {
+					pktTypeStr += ":BGP"
+				} else {
+					pktTypeStr += fmt.Sprintf("[Port:%d]", tcpPkt.DstPort)
+				}
+			}
+		} else {
+			pktTypeStr += fmt.Sprintf(":IPv6 with protocol : %d", ipPacket.NextHeader)
+		}
+	}
+	return pktTypeStr
 }
