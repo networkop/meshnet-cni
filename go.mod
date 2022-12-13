@@ -7,7 +7,9 @@ require (
 	github.com/containernetworking/plugins v0.9.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
+	github.com/google/gopacket v1.1.19
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
+	github.com/openconfig/gnmi v0.0.0-20220920173703-480bf53a74d2
 	github.com/redhat-nfvpe/koko v0.0.0-20210415181932-a18aa44814ea
 	github.com/sirupsen/logrus v1.8.1
 	github.com/vishvananda/netlink v1.1.1-0.20201029203352-d40f9887b852
@@ -15,11 +17,6 @@ require (
 	google.golang.org/protobuf v1.28.0
 	k8s.io/apimachinery v0.21.1
 	k8s.io/client-go v0.21.1
-)
-
-require (
-	github.com/google/gopacket v1.1.19
-	github.com/openconfig/gnmi v0.0.0-20220920173703-480bf53a74d2
 )
 
 require (
