@@ -17,7 +17,10 @@ require (
 	k8s.io/client-go v0.21.1
 )
 
-require github.com/google/gopacket v1.1.19
+require (
+	github.com/google/gopacket v1.1.19
+	github.com/openconfig/gnmi v0.0.0-20220920173703-480bf53a74d2
+)
 
 require (
 	github.com/Microsoft/go-winio v0.4.11 // indirect
