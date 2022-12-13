@@ -211,7 +211,7 @@ func DeleteWiresByPod(namespace string, podName string) error {
 	if errs.Err() != nil {
 		return fmt.Errorf("failed to remove all grpc-wires for pod %s:%s: %w", namespace, podName, errs.Err())
 	}
-	log.Infof("Successfully removed all grpc-wires for pod %s:%s", namespace, podname)
+	log.Infof("Successfully removed all grpc-wires for pod %s:%s", namespace, podName)
 	return nil
 }
 
