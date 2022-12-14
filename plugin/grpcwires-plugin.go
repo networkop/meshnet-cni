@@ -75,8 +75,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 				return fmt.Errorf("could not check grpc wire: %v", err)
 			}
 			if resp.Response {
-				/* While this pod was busy creating other links or was busy with some other task, the remote
-				   pod had finished creating this grpc-link.  */
+				/* Higher priority pod has created the grpc-link.  */
 				log.Infof("This grpc wire is already set by the remote peer. Local interface id:%d", resp.PeerIntfId)
 				return nil
 			}
@@ -158,7 +157,6 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 	if err != nil {
 		return fmt.Errorf("could not get interface by name: %v", err)
 	}
-	//+++tbd: add error handing
 
 	wireDefRemot := mpb.WireDef{
 		/*PeerIntfId : this is the interface id on which the host machine will receive grpc

@@ -123,6 +123,7 @@ func Init() error {
 		Name: defaultPluginName,
 	})
 
+	conf["cniVersion"] = "0.3.0"
 	conf["plugins"] = plugins
 
 	// TODO: check if we can avoid creating a custom file for propagating value of env INTER_NODE_LINK_TYPE

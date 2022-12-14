@@ -375,8 +375,8 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 //-----------------------------------------------------------------------------------------------------------
 func RecvFrmLocalPodThread(wire *GRPCWire) error {
 
-	defaultPort := "51111" //+++todo: use proper constant as defined in some other file
-	pktBuffSz := int32(1024 * 64)
+	defaultPort := "51111"             //+++todo: use proper constant as defined in some other file
+	pktBuffSz := int32(1024 * 64 * 10) //keep buffer for MAX 10 64K frames
 
 	url := strings.TrimSpace(fmt.Sprintf("%s:%s", wire.PeerPodIP, defaultPort))
 	/* Utilizing google gopacket for polling for packets from the node. This seems to be the
@@ -433,8 +433,11 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 			things gets really messed up.   */
 			if len(data) > 1518 {
 				pktType := DecodeFrame(payload.Frame)
-				log.Infof("Daemon(RecvFrmLocalPodThread): Dropping:unusually large packet received from local pod. size: %d, pkt:%s", len(data), pktType)
-				continue
+				log.Infof("Daemon(RecvFrmLocalPodThread): unusually large packet received from local pod (may be GRO enabled). size: %d, pkt:%s", len(data), pktType)
+				/* When Generic Receive Offload (GRO) is enabled then containers can send packets larger than MTU size packet. Do not drop these
+				   packets, deliver it to the receiving container to process.
+				*/
+				//continue
 			}
 
 			ok, err := wireClient.SendToOnce(ctx, payload)
@@ -497,7 +500,7 @@ func DecodePkt(packet gopacket.Packet, layerType gopacket.LayerType, length uint
 	if layerType == layers.LayerTypeIPv4 {
 		decodedLen, typeStr = decodeIPv4Pkt(packet)
 		pktTypeStr += typeStr
-	} else if layerType== layers.LayerTypeIPv6 {
+	} else if layerType == layers.LayerTypeIPv6 {
 		decodedLen, typeStr = decodeIPv6Pkt(packet)
 		pktTypeStr += typeStr
 	} else if layerType == layers.LayerTypeLLC {
@@ -604,4 +607,3 @@ func decodeIPv6Pkt(packet gopacket.Packet) (int, string) {
 	}
 	return decodedLen, pktTypeStr
 }
-
