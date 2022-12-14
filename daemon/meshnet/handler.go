@@ -193,7 +193,7 @@ func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.Bo
 			elString, ok := el.(string)
 			if ok {
 				if elString != skip.Peer {
-					log.Errorf("Appending new element %s", elString)
+					log.Infof("Appending new element %s", elString)
 					newThisSkipped = append(newThisSkipped, elString)
 				}
 			}
