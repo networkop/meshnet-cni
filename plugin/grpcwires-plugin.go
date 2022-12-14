@@ -20,7 +20,7 @@ const (
 	skipStatusRetryCount    = 5
 )
 
-//--------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------
 func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localClient mpb.LocalClient, cniArgs *k8sArgs, ctx context.Context) error {
 	/* When this function is called it means that the two pods which are attached to this link
 	   are both up. They have got the management IP already.

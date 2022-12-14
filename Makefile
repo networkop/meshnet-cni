@@ -39,7 +39,8 @@ docker:
 
 .PHONY: release
 ## Release the current code with git tag and `latest`
-release: 
+release:
+	docker run --rm --privileged tonistiigi/binfmt --install all
 	docker buildx build --push \
 		--build-arg LDFLAGS=${LDFLAGS} \
 		--platform ${ARCHS} \
