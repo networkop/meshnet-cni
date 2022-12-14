@@ -103,8 +103,8 @@ Below is the order of operation of the plugin from the perspective of kube-node-
 5. meshnet binary (via a local meshnet daemon) retrieves the list of `links` and looks up peer pod's metadata to identify what kind of link to setup - veth, vxlan or macvlan.
 6. If the peer is on the same node, it calls koko to setup a `veth` link between the two pods.
 7. If the peer is on the remote node, it does two things:  
-    7.1 It calls koko to setup a local `vxlan` link.
-    7.2 It makes a gRPC `Update` call to the remote node's meshnet daemon, specifying this link's metadata (e.g. VTEP IP and VNI).
+    * 7.1 It calls koko to setup a local `vxlan` link.
+    * 7.2 It makes a gRPC `Update` call to the remote node's meshnet daemon, specifying this link's metadata (e.g. VTEP IP and VNI).
 8. Upon receipt of this information, remote node's `meshnetd` idepmotently updates the local vxlan link, i.e. it creates a new link, updates the existing link if there's a change or does nothing if the link attributes are the same.
 
 ## Local Demo
@@ -222,9 +222,9 @@ Meshnet will convert the above to conflist and produce the file `/etc/cni/net.d/
     }
   ]
 }
-``
+```
 
-### Cusomising installation paths
+### Customising installation paths
 
 In some cases, Kubernetes distros may store CNI configuration files and binaries in non-standard directories and override them with `--cni-bin-dir` and `--cni-conf-dir` flags. In order to install meshnet into the right directories, create a new overlay under `manifests/overlays` and patch the `cni-dir` or `cni-bin` volumes with the correct location. See [kops overlay](manifests/overlays/kops) for an example.
 
@@ -234,7 +234,7 @@ If you need to have Pods restarted and re-scheduled by the kube-controller, it's
 
 ### Examples
 
-Inside the `tests` directory there are 4 manifests with the following test topologies
+Inside the `tests` directory there are 4 manifests with the following test topologies:
 
 * A simple point-to-point 2-node topology
 * A 3-node topology connected as a triangle
