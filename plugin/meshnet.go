@@ -46,7 +46,7 @@ type k8sArgs struct {
 	K8S_POD_INFRA_CONTAINER_ID types.UnmarshallableString
 }
 
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 func init() {
 	// this ensures that main runs only on main thread (thread group leader).
 	// since namespace ops (unshare, setns) are done for a single thread, we
@@ -54,7 +54,7 @@ func init() {
 	runtime.LockOSThread()
 }
 
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 // loadConf loads information from cni.conf
 func loadConf(bytes []byte) (*netConf, *current.Result, error) {
 	n := &netConf{}
@@ -111,7 +111,7 @@ func getVxlanSource(nodeIP string) (string, string, error) {
 	return "", "", fmt.Errorf("no iface found for address %s", nodeIP)
 }
 
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 // makeVeth creates koko.Veth from NetNS and LinkName
 func makeVeth(netNS, linkName string, ip string) (*koko.VEth, error) {
 	log.Infof("Creating Veth struct with NetNS:%s and intfName: %s, IP:%s", netNS, linkName, ip)
@@ -131,7 +131,7 @@ func makeVeth(netNS, linkName string, ip string) (*koko.VEth, error) {
 	return &veth, nil
 }
 
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 // Creates koko.Vxlan from ParentIF, destination IP and VNI
 func makeVxlan(srcIntf string, peerIP string, idx int64) *koko.VxLan {
 	return &koko.VxLan{
@@ -141,7 +141,7 @@ func makeVxlan(srcIntf string, peerIP string, idx int64) *koko.VxLan {
 	}
 }
 
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 // Adds interfaces to a POD
 func cmdAdd(args *skel.CmdArgs) error {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -377,7 +377,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	return types.PrintResult(result, n.CNIVersion)
 }
 
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 // Deletes interfaces from a POD
 func cmdDel(args *skel.CmdArgs) error {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -482,7 +482,7 @@ func SetInterNodeLinkType() {
 	interNodeLinkType = string(b)
 }
 
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 func main() {
 	fp, err := os.OpenFile("/var/log/meshnet-cni.log", os.O_APPEND|os.O_CREATE|os.O_RDWR, 0666)
 	if err == nil {

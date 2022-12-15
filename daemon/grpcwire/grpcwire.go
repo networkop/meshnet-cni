@@ -13,6 +13,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	mpb "github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
+	"github.com/openconfig/gnmi/errlist"
 	koko "github.com/redhat-nfvpe/koko/api"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -24,7 +25,9 @@ type intfIndex struct {
 	currId int64
 }
 
-/* In a given node a veth-pair connects a pod with the meshnet daemon hosted in the node. This meshnet
+/*
+	In a given node a veth-pair connects a pod with the meshnet daemon hosted in the node. This meshnet
+
 daemon provides the grpc-wire service to connect the local pod with the remote pod over grpc. The node
 end of the veth-pair must have unique name with in the node. A node can have multiple pods. So there
 will be multiple veth-pairs for connecting multiple nodes to meshnet daemon and each of them (the node end) must have unique
@@ -169,7 +172,7 @@ func GetWireByUID(namespace string, linkUID int) (*GRPCWire, bool) {
 	return wires.GetWire(namespace, linkUID)
 }
 
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 func AddWire(wire *GRPCWire, handle *pcap.Handle) int {
 	/* Populate the active wire map and returns the number of currently added active wires. */
 
@@ -182,7 +185,7 @@ func AddWire(wire *GRPCWire, handle *pcap.Handle) int {
 	return len(wires.wires)
 }
 
-//-------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 // DeleteWire cleans up the active wire map and returns the number of currently added active wire.
 func DeleteWire(wire *GRPCWire) int {
 	wires.Delete(wire)
@@ -192,36 +195,27 @@ func DeleteWire(wire *GRPCWire) int {
 //-----------------------------------------------------------------------------------------------------------
 
 func DeleteWiresByPod(namespace string, podName string) error {
-
-	log.Infof("Removing grpc-wire for pod %s:%s", namespace, podName)
+	log.Infof("Removing all grpc-wires for pod %s:%s", namespace, podName)
 	wires, ok := GetWiresByPod(namespace, podName)
 	if !ok || len(wires) == 0 {
-		log.Infof("No grpc-wire for pod %s:%s", namespace, podName)
+		log.Infof("No grpc-wires for pod %s:%s", namespace, podName)
 		return nil
 	}
-
-	resp := true
-	var fstErr error
+	var errs errlist.List
 	for _, w := range wires {
 		if err := RemoveWire(w); err != nil {
-			log.Infof("Error while removing GRPC wire for  pod: %s@%s. err:%v", w.LocalPodIfaceName, w.LocalPodName, err)
-			// instead of failing, just log the error and move on
-			resp = false
-			if fstErr == nil {
-				fstErr = err
-				// even if we have an error for this link, we still try to remove the other links
-			}
-		}
-		if resp {
-			log.Infof("Removed all grpc-wire for pod: %s@%s", w.LocalPodIfaceName, w.LocalPodName)
+			log.Infof("Error removing grpc-wire for pod %s@%s: %v", w.LocalPodIfaceName, w.LocalPodName, err)
+			errs.Add(err)
 		}
 	}
-
-	// only reports the first error
-	return fmt.Errorf("failed to remove gRPC wire for pod %s: %w", podName, fstErr)
+	if errs.Err() != nil {
+		return fmt.Errorf("failed to remove all grpc-wires for pod %s:%s: %w", namespace, podName, errs.Err())
+	}
+	log.Infof("Successfully removed all grpc-wires for pod %s:%s", namespace, podName)
+	return nil
 }
 
-//----------------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------------
 func RemoveWire(wire *GRPCWire) error {
 
 	/* stop the packet receive thread for this pod */
@@ -230,7 +224,7 @@ func RemoveWire(wire *GRPCWire) error {
 	/* Remove the veth from the node */
 	intf, err := net.InterfaceByIndex(int(wire.LocalNodeIfaceID))
 	if err != nil {
-		return fmt.Errorf("failed to etrieve interface data for interface index %d, for link %d: %w", wire.LocalNodeIfaceID, wire.UID, err)
+		return fmt.Errorf("failed to retrieve interface data for interface index %d, for link %d: %w", wire.LocalNodeIfaceID, wire.UID, err)
 	}
 	myVeth := koko.VEth{}
 	myVeth.LinkName = intf.Name
@@ -244,7 +238,7 @@ func RemoveWire(wire *GRPCWire) error {
 	return nil
 }
 
-//-----------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------
 func GetHostIntfHndl(intfID int64) (*pcap.Handle, error) {
 
 	val, ok := wires.GetHandle(intfID)
@@ -255,7 +249,7 @@ func GetHostIntfHndl(intfID int64) (*pcap.Handle, error) {
 
 }
 
-//-----------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------
 // Generate the name of the interface to be placed on the node
 func GenNodeIfaceName(podName string, podIfaceName string) (string, error) {
 	// Linux has issue if interface name is too long. Generate a smaller name.
@@ -277,8 +271,8 @@ func GenNodeIfaceName(podName string, podIfaceName string) (string, error) {
 	return ifaceName, nil
 }
 
-//-----------------------------------------------------------------------------------------------------------
-//When the remote peer tells the local node to create the local end of the grpc-wire
+// -----------------------------------------------------------------------------------------------------------
+// When the remote peer tells the local node to create the local end of the grpc-wire
 func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*GRPCWire, error) {
 
 	var err error
@@ -372,7 +366,7 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 	return aWire, nil
 }
 
-//-----------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------
 func RecvFrmLocalPodThread(wire *GRPCWire) error {
 
 	defaultPort := "51111" //+++todo: use proper constant as defined in some other file
@@ -449,7 +443,7 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 	}
 }
 
-//------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------------
 func DecodePkt(frame []byte) string {
 	pktType := "Unknown"
 
