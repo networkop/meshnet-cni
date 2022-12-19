@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	mpb "github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
@@ -12,6 +13,12 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+)
+
+
+const (
+	skipStatusRetryInterval = 2 // sec
+	skipStatusRetryCount    = 5
 )
 
 // --------------------------------------------------------------------------------------------------------
@@ -24,11 +31,11 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		return fmt.Errorf("can't establish grpc channel. link not provided. link:%p", link)
 	}
 
-	log.Infof("Setting up grpc-wire:(local-pod:%s:%s@node:%s <----link uid: %d----> remote-pod:%s:%s@node:%s)",
-		localPod.Name, link.LocalIntf, localPod.SrcIp,
+	log.Infof("%s : Setting up grpc-wire:(local-pod:%s:%s@node:%s <----link uid: %d----> remote-pod:%s:%s@node:%s)",
+		localPod.Name, localPod.Name, link.LocalIntf, localPod.SrcIp,
 		link.Uid, peerPod.Name, link.PeerIntf, peerPod.SrcIp)
 
-	log.Infof("Checking if we've been skipped")
+	log.Infof("%s : Checking if we've been skipped", localPod.Name)
 	isSkipped, err := localClient.IsSkipped(ctx, &mpb.SkipQuery{
 		Pod:    localPod.Name,
 		Peer:   peerPod.Name,
@@ -40,6 +47,11 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		return err
 	}
 
+	wireDef := mpb.WireDef{
+		LocalPodNetNs: localPod.NetNs,
+		LinkUid:       link.Uid,
+		KubeNs:        localPod.KubeNs,
+	}
 	// Comparing names to determine higher priority
 	higherPrio := localPod.Name > peerPod.Name
 
@@ -52,16 +64,48 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		this situation only high priority pod must create the tunnel and not the low priority one. This will
 		avoid conflict. */
 		log.Infof("Pod %s with link uid %d is not skipped. This pod has low priority. Peer pod %s will create this grpc-wire", localPod.Name, link.Uid, peerPod.Name)
-		return nil
+
+		ticker := time.NewTicker(time.Second * skipStatusRetryInterval)
+		defer ticker.Stop()
+
+		iteration := 0
+		for _ = range ticker.C {
+			// Check if it has created the wire while we were waiting
+			resp, err := localClient.GRPCWireExists(ctx, &wireDef)
+			if err != nil {
+				return fmt.Errorf("could not check grpc wire: %v", err)
+			}
+			if resp.Response {
+				/* Higher priority pod has created the grpc-link.  */
+				log.Infof("This grpc wire is already set by the remote peer. Local interface id:%d", resp.PeerIntfId)
+				return nil
+			}
+
+			log.Infof("%s : Retrying to read skipped status for pod %s", localPod.Name, localPod.Name)
+			isSkipped, err = localClient.IsSkipped(ctx, &mpb.SkipQuery{
+				Pod:    localPod.Name,
+				Peer:   peerPod.Name,
+				KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
+			})
+			if err != nil {
+				log.Infof("Failed to read skipped status for pod %s", localPod.Name)
+				return err
+			}
+
+			if !isSkipped.Response {
+				if iteration == skipStatusRetryCount {
+					return fmt.Errorf("%s : Could not read skip status in %d try. This link between %s adn %s not created.", localPod.Name, skipStatusRetryCount, localPod.Name, peerPod.Name)
+				}
+				iteration++
+			} else {
+				log.Infof("Local pod %s is skipped by peer %s. So we can create wire now", localPod.Name, peerPod.Name)
+				break
+			}
+		} // end of for
 	}
 
 	//+++think : I have doubt, if this check for links existence is an overkill or not.
 	//           Anyway this is a creation time check done once for a link. Not expensive.
-	wireDef := mpb.WireDef{
-		LocalPodNetNs: localPod.NetNs,
-		LinkUid:       link.Uid,
-		KubeNs:        localPod.KubeNs,
-	}
 	resp, err := localClient.GRPCWireExists(ctx, &wireDef)
 	if err != nil {
 		return fmt.Errorf("could not check grpc wire: %v", err)
@@ -114,7 +158,6 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 	if err != nil {
 		return fmt.Errorf("could not get interface by name: %v", err)
 	}
-	//+++tbd: add error handing
 
 	wireDefRemot := mpb.WireDef{
 		/*PeerIntfId : this is the interface id on which the host machine will receive grpc

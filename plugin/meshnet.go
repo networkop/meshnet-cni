@@ -221,7 +221,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		// Initialising peer pod's metadata
-		log.Infof("Retrieving peer pod %s information from meshnet daemon", link.PeerPod)
+		log.Infof("Pod %s is retrieving peer pod %s information from meshnet daemon", cniArgs.K8S_POD_NAME, link.PeerPod)
 		peerPod, err := meshnetClient.Get(ctx, &mpb.PodQuery{
 			Name:   link.PeerPod,
 			KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
