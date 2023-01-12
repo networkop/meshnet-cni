@@ -13,3 +13,4 @@ patches:
     namespace: meshnet
 resources:
 - ../../base/
+
