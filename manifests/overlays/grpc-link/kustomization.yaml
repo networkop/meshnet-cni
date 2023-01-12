@@ -13,7 +13,4 @@ patches:
     namespace: meshnet
 resources:
 - ../../base/
-images:
-- name: networkop/meshnet
-  newName: gcr.io/kt-nts-athena-dev/networkop/meshnet
-  newTag: dac733d-dirty
+
