@@ -272,14 +272,20 @@ func (m *Meshnet) RemGRPCWire(ctx context.Context, wireDef *mpb.WireDef) (*mpb.B
 func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*mpb.BoolResponse, error) {
 	locInf, err := net.InterfaceByName(wireDef.VethNameLocalHost)
 	if err != nil {
-		mnetdLogger.Errorf("Failed to retrieve interface ID for interface %v. error:%v", wireDef.VethNameLocalHost, err)
+		log.WithFields(log.Fields{
+			"daemon":  "meshnetd",
+			"overlay": "gRPC",
+		}).Errorf("[ADD-WIRE:LOCAL-END]For pod %s failed to retrieve interface ID for interface %v. error:%v", wireDef.LocalPodName, wireDef.VethNameLocalHost, err)
 		return &mpb.BoolResponse{Response: false}, err
 	}
 
 	//Using google gopacket for packet receive. An alternative could be using socket. Not sure it it provides any advantage over gopacket.
 	wrHandle, err := pcap.OpenLive(wireDef.VethNameLocalHost, 65365, true, pcap.BlockForever)
 	if err != nil {
-		mnetdLogger.Fatalf("Could not open interface for send/recv packets for containers. error:%v", err)
+		log.WithFields(log.Fields{
+			"daemon":  "meshnetd",
+			"overlay": "gRPC",
+		}).Fatalf("[ADD-WIRE:LOCAL-END]Could not open interface for send/recv packets for containers. error:%v", err)
 		return &mpb.BoolResponse{Response: false}, err
 	}
 
@@ -305,7 +311,10 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 
 	grpcwire.AddWire(&aWire, wrHandle)
 
-	mnetdLogger.Infof("Starting the local packet receive thread for pod interface %s", wireDef.IntfNameInPod)
+	log.WithFields(log.Fields{
+		"daemon":  "meshnetd",
+		"overlay": "gRPC",
+	}).Infof("[ADD-WIRE:LOCAL-END]For pod %s@%s starting the local packet receive thread", wireDef.LocalPodName, wireDef.IntfNameInPod)
 	// TODO: handle error here
 	go grpcwire.RecvFrmLocalPodThread(&aWire)
 
@@ -345,7 +354,10 @@ func (m *Meshnet) AddGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (
 	stopC := make(chan struct{})
 	wire, err := grpcwire.CreateGRPCWireRemoteTriggered(wireDef, stopC)
 	if err == nil {
-		// TODO: handle error here
+		log.WithFields(log.Fields{
+			"daemon":  "meshnetd",
+			"overlay": "gRPC",
+		}).Infof("[ADD-WIRE:REMOTE-END]For pod %s@%s starting the local packet receive thread", wireDef.LocalPodName, wireDef.IntfNameInPod)
 		go grpcwire.RecvFrmLocalPodThread(wire)
 
 		return &mpb.WireCreateResponse{Response: true, PeerIntfId: wire.LocalNodeIfaceID}, nil
@@ -353,7 +365,7 @@ func (m *Meshnet) AddGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (
 	log.WithFields(log.Fields{
 		"daemon":  "meshnetd",
 		"overlay": "gRPC",
-	}).Errorf("AddWireRemote err: %v", err)
+	}).Errorf("[ADD-WIRE:REMOTE-END] err: %v", err)
 	return &mpb.WireCreateResponse{Response: false, PeerIntfId: wireDef.PeerIntfId}, err
 }
 

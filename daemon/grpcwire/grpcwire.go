@@ -294,18 +294,18 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 	   We will allow only one to complete the creation. */
 	grpcWire, ok := GetWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid))
 	if ok && grpcWire.IsReady {
-		grpcOvrlyLogger.Infof("This grpc-wire is already created by %s. Local interface id : %d peer interface id : %d", grpcWire.Originator, grpcWire.LocalNodeIfaceID, grpcWire.PeerIfaceID)
+		grpcOvrlyLogger.Infof("[ADD-WIRE:REMOTE-END] This grpc-wire is already created by %s. Local interface id : %d peer interface id : %d", grpcWire.Originator, grpcWire.LocalNodeIfaceID, grpcWire.PeerIfaceID)
 		return grpcWire, nil
 	}
 
 	outIfNm, err := GenNodeIfaceName(wireDef.LocalPodName, wireDef.IntfNameInPod)
 	if err != nil {
-		return nil, fmt.Errorf("could not get current network namespace: %v", err)
+		return nil, fmt.Errorf("[ADD-WIRE:REMOTE-END] could not get current network namespace: %v", err)
 	}
 
 	currNs, err := ns.GetCurrentNS()
 	if err != nil {
-		return nil, fmt.Errorf("could not get current network namespace: %v", err)
+		return nil, fmt.Errorf("[ADD-WIRE:REMOTE-END] could not get current network namespace: %v", err)
 	}
 
 	/* Create the veth to connect the pod with the meshnet daemon running on the node */
@@ -333,15 +333,15 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 	}
 
 	if err = koko.MakeVeth(inContainerVeth, hostEndVeth); err != nil {
-		grpcOvrlyLogger.Infof("Error creating vEth pair (in:%s <--> out:%s).  Error-> %s", inIfNm, outIfNm, err)
+		grpcOvrlyLogger.Infof("[ADD-WIRE:REMOTE-END] Error creating vEth pair (in:%s <--> out:%s).  Error-> %s", inIfNm, outIfNm, err)
 		return nil, err
 	}
 	locIface, err := net.InterfaceByName(hostEndVeth.LinkName)
 	if err != nil {
-		grpcOvrlyLogger.Fatalf("Could not get interface index for %s. error:%v", hostEndVeth.LinkName, err)
+		grpcOvrlyLogger.Fatalf("[ADD-WIRE:REMOTE-END] Could not get interface index for %s. error:%v", hostEndVeth.LinkName, err)
 		return nil, err
 	}
-	grpcOvrlyLogger.Infof("On Remote Trigger from %s:%d : Successfully created vEth pair (in(name):%s <--> out(name)-index:%s:%d).", wireDef.PeerIp, wireDef.PeerIntfId, inIfNm, outIfNm, locIface.Index)
+	grpcOvrlyLogger.Infof("[ADD-WIRE:REMOTE-END] Trigger from %s:%d : Successfully created pod to node vEth pair %s@%s <--> %s(%d).", wireDef.PeerIp, wireDef.PeerIntfId, inIfNm, wireDef.LocalPodName, outIfNm, locIface.Index)
 	aWire := &GRPCWire{
 		UID: int(wireDef.LinkUid),
 
@@ -371,7 +371,7 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 	*/
 	wrHandle, err := pcap.OpenLive(hostEndVeth.LinkName, 65365, true, pcap.BlockForever)
 	if err != nil {
-		grpcOvrlyLogger.Fatalf("Could not open interface for sed/recv packets for containers. error:%v", err)
+		grpcOvrlyLogger.Fatalf("[ADD-WIRE:REMOTE-END] Could not open interface for sed/recv packets for containers. error:%v", err)
 		return nil, err
 	}
 
@@ -424,7 +424,7 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 	for {
 		select {
 		case <-wire.StopC:
-			grpcOvrlyLogger.Printf("Receive thread closing connection with remote peer-iface@peer-node-ip: %d@%s", wire.PeerPodIP, wire.PeerIfaceID)
+			grpcOvrlyLogger.Infof("RecvFrmLocalPodThread: closing connection with remote peer-iface@peer-node-ip: %d@%s", wire.PeerIfaceID, wire.PeerPodIP)
 			return io.EOF
 		case packet = <-in:
 			data := packet.Data()
@@ -440,7 +440,7 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 			things gets really messed up.   */
 			if len(data) > 1518 {
 				pktType := DecodeFrame(payload.Frame)
-				grpcOvrlyLogger.Infof("Daemon(RecvFrmLocalPodThread): unusually large packet received from local pod (may be GRO enabled). size: %d, pkt:%s", len(data), pktType)
+				grpcOvrlyLogger.Infof("RecvFrmLocalPodThread: unusually large packet received from local pod (may be GRO enabled). size: %d, pkt:%s", len(data), pktType)
 				/* When Generic Receive Offload (GRO) is enabled then containers can send packets larger than MTU size packet. Do not drop these
 				   packets, deliver it to the receiving container to process.
 				*/
@@ -449,14 +449,9 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 
 			ok, err := wireClient.SendToOnce(ctx, payload)
 			if err != nil || !ok.Response {
-				if err != nil {
-					grpcOvrlyLogger.Infof("Daemon(RecvFrmLocalPodThread): Failed to send packet to remote. err=%v", err)
-				} else {
-					err = fmt.Errorf("RecvFrmLocalPodThread:Failed to send packet to remote. GRPC return code: false")
-					grpcOvrlyLogger.Infof("Daemon(RecvFrmLocalPodThread):err= %v", err)
-				}
-				/* +++ we generate the error and continue. As the above errors will happen when the remote end is not yet ready.
-				       It will eventually get ready and if it can not then some will stop this thread.
+				grpcOvrlyLogger.Infof("RecvFrmLocalPodThread: Could not deliver pkt. Peer not ready. err=%v", err)
+				/* +++ we generate information and continue. As the above errors will happen when the remote end is not yet ready.
+				       It will eventually get ready and if it can't then some will stop this thread.
 				return err
 				*/
 			}
