@@ -201,28 +201,34 @@ func DeleteWire(wire *GRPCWire) int {
 //-----------------------------------------------------------------------------------------------------------
 
 func DeleteWiresByPod(namespace string, podName string) error {
-	grpcOvrlyLogger.Infof("Removing all grpc-wires for pod %s:%s", namespace, podName)
 	wires, ok := GetWiresByPod(namespace, podName)
 	if !ok || len(wires) == 0 {
-		grpcOvrlyLogger.Infof("No grpc-wires for pod %s:%s", namespace, podName)
+		grpcOvrlyLogger.Infof("[WIRE-DELETE]:All grpc-wires for pod %s:%s is already deleted", namespace, podName)
 		return nil
 	}
+	grpcOvrlyLogger.Infof("[WIRE-DELETE]:Removing %d grpc-wires for pod %s@%s", len(wires), podName, namespace)
 	var errs errlist.List
 	for _, w := range wires {
+		grpcOvrlyLogger.Infof("[WIRE-DELETE]:Removing local-iface@pod : %s@%s for wire UID: %d", w.LocalPodIfaceName, w.LocalPodName, w.UID)
 		if err := RemoveWire(w); err != nil {
-			grpcOvrlyLogger.Infof("Error removing grpc-wire for pod %s@%s: %v", w.LocalPodIfaceName, w.LocalPodName, err)
+			grpcOvrlyLogger.Infof("[WIRE-DELETE]:Error Removing local-iface@pod : %s@%s for wire UID: %d : %v", w.LocalPodIfaceName, w.LocalPodName, w.UID, err)
 			errs.Add(err)
 		}
 	}
 	if errs.Err() != nil {
-		return fmt.Errorf("failed to remove all grpc-wires for pod %s:%s: %w", namespace, podName, errs.Err())
+		return fmt.Errorf("[WIRE-DELETE]:failed to remove all grpc-wires for pod %s@%s: %w", podName, namespace, errs.Err())
 	}
-	grpcOvrlyLogger.Infof("Successfully removed all grpc-wires for pod %s:%s", namespace, podName)
+	grpcOvrlyLogger.Infof("[WIRE-DELETE]:Successfully removed all grpc-wires for pod %s@%s", podName, namespace)
 	return nil
 }
 
 // ----------------------------------------------------------------------------------------------------------
 func RemoveWire(wire *GRPCWire) error {
+
+	if wire == nil {
+		grpcOvrlyLogger.Infof("[WIRE-DELETE]:Null wire. This ware is already removed")
+		return nil
+	}
 
 	/* stop the packet receive thread for this pod */
 	close(wire.StopC)
@@ -230,17 +236,18 @@ func RemoveWire(wire *GRPCWire) error {
 	/* Remove the veth from the node */
 	intf, err := net.InterfaceByIndex(int(wire.LocalNodeIfaceID))
 	if err != nil {
-		return fmt.Errorf("failed to retrieve interface data for interface index %d, for link %d: %w", wire.LocalNodeIfaceID, wire.UID, err)
-	}
-	myVeth := koko.VEth{}
-	myVeth.LinkName = intf.Name
-	if err = myVeth.RemoveVethLink(); err != nil {
-		return fmt.Errorf("failed to remove veth link: %w", err)
+		grpcOvrlyLogger.Infof("[WIRE-DELETE]:Interface index %d for wire %d, is already cleaned up.", wire.LocalNodeIfaceID, wire.UID)
+	} else {
+		myVeth := koko.VEth{}
+		myVeth.LinkName = intf.Name
+		if err = myVeth.RemoveVethLink(); err != nil {
+			return fmt.Errorf("[WIRE-DELETE]:failed to remove veth link: %w", err)
+		}
 	}
 
 	DeleteWire(wire)
+	grpcOvrlyLogger.Infof("[WIRE-DELETE]:Successfully removed grpc wire for link %d.", wire.UID)
 
-	grpcOvrlyLogger.Infof("Successfully removed grpc wire for link %d.", wire.UID)
 	return nil
 }
 
@@ -417,7 +424,7 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 	for {
 		select {
 		case <-wire.StopC:
-			grpcOvrlyLogger.Printf("Receive thread closing connection with peer: %s@%d", wire.PeerPodIP, wire.PeerIfaceID)
+			grpcOvrlyLogger.Printf("Receive thread closing connection with remote peer-iface@peer-node-ip: %d@%s", wire.PeerPodIP, wire.PeerIfaceID)
 			return io.EOF
 		case packet = <-in:
 			data := packet.Data()
