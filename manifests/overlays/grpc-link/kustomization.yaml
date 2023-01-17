@@ -13,4 +13,7 @@ patches:
     namespace: meshnet
 resources:
 - ../../base/
-
+images:
+- name: networkop/meshnet
+  newName: gcr.io/kt-nts-athena-dev/mano2/networkop/meshnet
+  newTag: 8f055fc-dirty
