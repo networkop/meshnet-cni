@@ -6,7 +6,9 @@ import (
 	"strconv"
 
 	"github.com/networkop/meshnet-cni/daemon/cni"
+	"github.com/networkop/meshnet-cni/daemon/grpcwire"
 	"github.com/networkop/meshnet-cni/daemon/meshnet"
+	"github.com/networkop/meshnet-cni/daemon/vxlan"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -33,6 +35,10 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 		log.Debug("Verbose logging enabled")
 	}
+
+	meshnet.InitLogger()
+	grpcwire.InitLogger()
+	vxlan.InitLogger()
 
 	m, err := meshnet.New(meshnet.Config{
 		Port: grpcPort,

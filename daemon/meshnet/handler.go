@@ -18,28 +18,28 @@ import (
 )
 
 func (m *Meshnet) getPod(ctx context.Context, name, ns string) (*unstructured.Unstructured, error) {
-	log.Infof("Reading pod %s from K8s", name)
+	mnetdLogger.Infof("Reading pod %s from K8s", name)
 	return m.tClient.Topology(ns).Unstructured(ctx, name, metav1.GetOptions{})
 }
 
 func (m *Meshnet) updateStatus(ctx context.Context, obj *unstructured.Unstructured, ns string) error {
-	log.Infof("Update pod status %s from K8s", obj.GetName())
+	mnetdLogger.Infof("Update pod status %s from K8s", obj.GetName())
 	_, err := m.tClient.Topology(ns).Update(ctx, obj, metav1.UpdateOptions{})
 	return err
 }
 
 func (m *Meshnet) Get(ctx context.Context, pod *mpb.PodQuery) (*mpb.Pod, error) {
-	log.Infof("Retrieving %s's metadata from K8s...", pod.Name)
+	mnetdLogger.Infof("Retrieving %s's metadata from K8s...", pod.Name)
 
 	result, err := m.getPod(ctx, pod.Name, pod.KubeNs)
 	if err != nil {
-		log.Errorf("Failed to read pod %s from K8s", pod.Name)
+		mnetdLogger.Errorf("Failed to read pod %s from K8s", pod.Name)
 		return nil, err
 	}
 
 	remoteLinks, found, err := unstructured.NestedSlice(result.Object, "spec", "links")
 	if err != nil || !found || remoteLinks == nil {
-		log.Errorf("Could not find 'Link' array in pod's spec")
+		mnetdLogger.Errorf("Could not find 'Link' array in pod's spec")
 		return nil, err
 	}
 
@@ -47,7 +47,7 @@ func (m *Meshnet) Get(ctx context.Context, pod *mpb.PodQuery) (*mpb.Pod, error) 
 	for i := range links {
 		remoteLink, ok := remoteLinks[i].(map[string]interface{})
 		if !ok {
-			log.Errorf("Unrecognised 'Link' structure")
+			mnetdLogger.Errorf("Unrecognised 'Link' structure")
 			return nil, err
 		}
 		newLink := &mpb.Link{}
@@ -75,21 +75,21 @@ func (m *Meshnet) Get(ctx context.Context, pod *mpb.PodQuery) (*mpb.Pod, error) 
 }
 
 func (m *Meshnet) SetAlive(ctx context.Context, pod *mpb.Pod) (*mpb.BoolResponse, error) {
-	log.Infof("Setting %s's SrcIp=%s and NetNs=%s", pod.Name, pod.SrcIp, pod.NetNs)
+	mnetdLogger.Infof("Setting %s's SrcIp=%s and NetNs=%s", pod.Name, pod.SrcIp, pod.NetNs)
 
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		result, err := m.getPod(ctx, pod.Name, pod.KubeNs)
 		if err != nil {
-			log.Errorf("Failed to read pod %s from K8s", pod.Name)
+			mnetdLogger.Errorf("Failed to read pod %s from K8s", pod.Name)
 			return err
 		}
 
 		if err = unstructured.SetNestedField(result.Object, pod.SrcIp, "status", "src_ip"); err != nil {
-			log.Errorf("Failed to update pod's src_ip")
+			mnetdLogger.Errorf("Failed to update pod's src_ip")
 		}
 
 		if err = unstructured.SetNestedField(result.Object, pod.NetNs, "status", "net_ns"); err != nil {
-			log.Errorf("Failed to update pod's net_ns")
+			mnetdLogger.Errorf("Failed to update pod's net_ns")
 		}
 
 		return m.updateStatus(ctx, result, pod.KubeNs)
@@ -97,6 +97,7 @@ func (m *Meshnet) SetAlive(ctx context.Context, pod *mpb.Pod) (*mpb.BoolResponse
 
 	if retryErr != nil {
 		log.WithFields(log.Fields{
+			"daemon":   "meshnetd",
 			"err":      retryErr,
 			"function": "SetAlive",
 		}).Errorf("Failed to update pod %s alive status", pod.Name)
@@ -107,12 +108,12 @@ func (m *Meshnet) SetAlive(ctx context.Context, pod *mpb.Pod) (*mpb.BoolResponse
 }
 
 func (m *Meshnet) Skip(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolResponse, error) {
-	log.Infof("Skipping of pod %s by pod %s", skip.Peer, skip.Pod)
+	mnetdLogger.Infof("Skipping of pod %s by pod %s", skip.Peer, skip.Pod)
 
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		result, err := m.getPod(ctx, skip.Pod, skip.KubeNs)
 		if err != nil {
-			log.Errorf("Failed to read pod %s from K8s", skip.Pod)
+			mnetdLogger.Errorf("Failed to read pod %s from K8s", skip.Pod)
 			return err
 		}
 
@@ -121,7 +122,7 @@ func (m *Meshnet) Skip(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolRespo
 		newSkipped := append(skipped, skip.Peer)
 
 		if err := unstructured.SetNestedField(result.Object, newSkipped, "status", "skipped"); err != nil {
-			log.Errorf("Failed to updated skipped list")
+			mnetdLogger.Errorf("Failed to updated skipped list")
 			return err
 		}
 
@@ -129,6 +130,7 @@ func (m *Meshnet) Skip(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolRespo
 	})
 	if retryErr != nil {
 		log.WithFields(log.Fields{
+			"daemon":   "meshnetd",
 			"err":      retryErr,
 			"function": "Skip",
 		}).Errorf("Failed to update skip pod %s status", skip.Pod)
@@ -139,14 +141,14 @@ func (m *Meshnet) Skip(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolRespo
 }
 
 func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolResponse, error) {
-	log.Infof("Reverse-skipping of pod %s by pod %s", skip.Peer, skip.Pod)
+	mnetdLogger.Infof("Reverse-skipping of pod %s by pod %s", skip.Peer, skip.Pod)
 
 	var podName string
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// setting the value for peer pod
 		peerPod, err := m.getPod(ctx, skip.Peer, skip.KubeNs)
 		if err != nil {
-			log.Errorf("Failed to read pod %s from K8s", skip.Pod)
+			mnetdLogger.Errorf("Failed to read pod %s from K8s", skip.Pod)
 			return err
 		}
 		podName = peerPod.GetName()
@@ -155,10 +157,10 @@ func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.Bo
 		peerSkipped, _, _ := unstructured.NestedSlice(peerPod.Object, "status", "skipped")
 		newPeerSkipped := append(peerSkipped, skip.Pod)
 
-		log.Infof("Updating peer skipped list")
+		mnetdLogger.Infof("Updating peer skipped list")
 		// updating peer pod's skipped list locally
 		if err := unstructured.SetNestedField(peerPod.Object, newPeerSkipped, "status", "skipped"); err != nil {
-			log.Errorf("Failed to updated reverse-skipped list for peer pod %s", peerPod.GetName())
+			mnetdLogger.Errorf("Failed to updated reverse-skipped list for peer pod %s", peerPod.GetName())
 			return err
 		}
 
@@ -167,6 +169,7 @@ func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.Bo
 	})
 	if retryErr != nil {
 		log.WithFields(log.Fields{
+			"daemon":   "meshnetd",
 			"err":      retryErr,
 			"function": "SkipReverse",
 		}).Errorf("Failed to update peer pod %s skipreverse status", podName)
@@ -177,7 +180,7 @@ func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.Bo
 		// setting the value for this pod
 		thisPod, err := m.getPod(ctx, skip.Pod, skip.KubeNs)
 		if err != nil {
-			log.Errorf("Failed to read pod %s from K8s", skip.Pod)
+			mnetdLogger.Errorf("Failed to read pod %s from K8s", skip.Pod)
 			return err
 		}
 
@@ -186,6 +189,7 @@ func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.Bo
 		newThisSkipped := make([]interface{}, 0)
 
 		log.WithFields(log.Fields{
+			"daemon":      "meshnetd",
 			"thisSkipped": thisSkipped,
 		}).Info("THIS SKIPPED:")
 
@@ -193,20 +197,21 @@ func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.Bo
 			elString, ok := el.(string)
 			if ok {
 				if elString != skip.Peer {
-					log.Infof("Appending new element %s", elString)
+					mnetdLogger.Infof("Appending new element %s", elString)
 					newThisSkipped = append(newThisSkipped, elString)
 				}
 			}
 		}
 
 		log.WithFields(log.Fields{
+			"daemon":         "meshnetd",
 			"newThisSkipped": newThisSkipped,
 		}).Info("NEW THIS SKIPPED:")
 
 		// updating this pod's skipped list locally
 		if len(newThisSkipped) != 0 {
 			if err := unstructured.SetNestedField(thisPod.Object, newThisSkipped, "status", "skipped"); err != nil {
-				log.Errorf("Failed to cleanup skipped list for pod %s", thisPod.GetName())
+				mnetdLogger.Errorf("Failed to cleanup skipped list for pod %s", thisPod.GetName())
 				return err
 			}
 
@@ -217,6 +222,7 @@ func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.Bo
 	})
 	if retryErr != nil {
 		log.WithFields(log.Fields{
+			"daemon":   "meshnetd",
 			"err":      retryErr,
 			"function": "SkipReverse",
 		}).Error("Failed to update this pod skipreverse status")
@@ -227,11 +233,11 @@ func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.Bo
 }
 
 func (m *Meshnet) IsSkipped(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolResponse, error) {
-	log.Infof("Checking if %s is skipped by %s", skip.Peer, skip.Pod)
+	mnetdLogger.Infof("Checking if %s is skipped by %s", skip.Peer, skip.Pod)
 
 	result, err := m.getPod(ctx, skip.Peer, skip.KubeNs)
 	if err != nil {
-		log.Errorf("Failed to read pod %s from K8s", skip.Pod)
+		mnetdLogger.Errorf("Failed to read pod %s from K8s", skip.Pod)
 		return nil, err
 	}
 
@@ -248,7 +254,7 @@ func (m *Meshnet) IsSkipped(ctx context.Context, skip *mpb.SkipQuery) (*mpb.Bool
 
 func (m *Meshnet) Update(ctx context.Context, pod *mpb.RemotePod) (*mpb.BoolResponse, error) {
 	if err := vxlan.CreateOrUpdate(pod); err != nil {
-		log.Errorf("Failed to Update Vxlan")
+		mnetdLogger.Errorf("Failed to Update Vxlan")
 		return &mpb.BoolResponse{Response: false}, nil
 	}
 	return &mpb.BoolResponse{Response: true}, nil
@@ -266,14 +272,20 @@ func (m *Meshnet) RemGRPCWire(ctx context.Context, wireDef *mpb.WireDef) (*mpb.B
 func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*mpb.BoolResponse, error) {
 	locInf, err := net.InterfaceByName(wireDef.VethNameLocalHost)
 	if err != nil {
-		log.Errorf("Failed to retrieve interface ID for interface %v. error:%v", wireDef.VethNameLocalHost, err)
+		log.WithFields(log.Fields{
+			"daemon":  "meshnetd",
+			"overlay": "gRPC",
+		}).Errorf("[ADD-WIRE:LOCAL-END]For pod %s failed to retrieve interface ID for interface %v. error:%v", wireDef.LocalPodName, wireDef.VethNameLocalHost, err)
 		return &mpb.BoolResponse{Response: false}, err
 	}
 
 	//Using google gopacket for packet receive. An alternative could be using socket. Not sure it it provides any advantage over gopacket.
 	wrHandle, err := pcap.OpenLive(wireDef.VethNameLocalHost, 65365, true, pcap.BlockForever)
 	if err != nil {
-		log.Fatalf("Could not open interface for send/recv packets for containers. error:%v", err)
+		log.WithFields(log.Fields{
+			"daemon":  "meshnetd",
+			"overlay": "gRPC",
+		}).Fatalf("[ADD-WIRE:LOCAL-END]Could not open interface for send/recv packets for containers. error:%v", err)
 		return &mpb.BoolResponse{Response: false}, err
 	}
 
@@ -299,7 +311,10 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 
 	grpcwire.AddWire(&aWire, wrHandle)
 
-	log.Infof("Starting the local packet receive thread for pod interface %s", wireDef.IntfNameInPod)
+	log.WithFields(log.Fields{
+		"daemon":  "meshnetd",
+		"overlay": "gRPC",
+	}).Infof("[ADD-WIRE:LOCAL-END]For pod %s@%s starting the local packet receive thread", wireDef.LocalPodName, wireDef.IntfNameInPod)
 	// TODO: handle error here
 	go grpcwire.RecvFrmLocalPodThread(&aWire)
 
@@ -310,7 +325,10 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 func (m *Meshnet) SendToOnce(ctx context.Context, pkt *mpb.Packet) (*mpb.BoolResponse, error) {
 	wrHandle, err := grpcwire.GetHostIntfHndl(pkt.RemotIntfId)
 	if err != nil {
-		log.Errorf("SendToOnce (wire id - %v): Could not find local handle. err:%v", pkt.RemotIntfId, err)
+		log.WithFields(log.Fields{
+			"daemon":  "meshnetd",
+			"overlay": "gRPC",
+		}).Errorf("SendToOnce (wire id - %v): Could not find local handle. err:%v", pkt.RemotIntfId, err)
 		return &mpb.BoolResponse{Response: false}, err
 	}
 
@@ -321,7 +339,10 @@ func (m *Meshnet) SendToOnce(ctx context.Context, pkt *mpb.Packet) (*mpb.BoolRes
 
 	err = wrHandle.WritePacketData(pkt.Frame)
 	if err != nil {
-		log.Errorf("SendToOnce (wire id - %v): Could not write packet(%d bytes) to local interface. err:%v", pkt.RemotIntfId, len(pkt.Frame), err)
+		log.WithFields(log.Fields{
+			"daemon":  "meshnetd",
+			"overlay": "gRPC",
+		}).Errorf("SendToOnce (wire id - %v): Could not write packet(%d bytes) to local interface. err:%v", pkt.RemotIntfId, len(pkt.Frame), err)
 		return &mpb.BoolResponse{Response: false}, err
 	}
 
@@ -333,12 +354,18 @@ func (m *Meshnet) AddGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (
 	stopC := make(chan struct{})
 	wire, err := grpcwire.CreateGRPCWireRemoteTriggered(wireDef, stopC)
 	if err == nil {
-		// TODO: handle error here
+		log.WithFields(log.Fields{
+			"daemon":  "meshnetd",
+			"overlay": "gRPC",
+		}).Infof("[ADD-WIRE:REMOTE-END]For pod %s@%s starting the local packet receive thread", wireDef.LocalPodName, wireDef.IntfNameInPod)
 		go grpcwire.RecvFrmLocalPodThread(wire)
 
 		return &mpb.WireCreateResponse{Response: true, PeerIntfId: wire.LocalNodeIfaceID}, nil
 	}
-	log.Errorf("AddWireRemote err: %v", err)
+	log.WithFields(log.Fields{
+		"daemon":  "meshnetd",
+		"overlay": "gRPC",
+	}).Errorf("[ADD-WIRE:REMOTE-END] err: %v", err)
 	return &mpb.WireCreateResponse{Response: false, PeerIntfId: wireDef.PeerIntfId}, err
 }
 
