@@ -39,15 +39,21 @@ type Meshnet struct {
 	lis     net.Listener
 }
 
+var mnetdLogger *log.Entry = nil
+
+func InitLogger() {
+	mnetdLogger = log.WithFields(log.Fields{"daemon": "meshnetd"})
+}
+
 func restConfig() (*rest.Config, error) {
-	log.Infof("Trying in-cluster configuration")
+	mnetdLogger.Infof("Trying in-cluster configuration")
 	rCfg, err := rest.InClusterConfig()
 	if err != nil {
 		kubecfg := filepath.Join(".kube", "config")
 		if home := homedir.HomeDir(); home != "" {
 			kubecfg = filepath.Join(home, kubecfg)
 		}
-		log.Infof("Falling back to kubeconfig: %q", kubecfg)
+		mnetdLogger.Infof("Falling back to kubeconfig: %q", kubecfg)
 		rCfg, err = clientcmd.BuildConfigFromFlags("", kubecfg)
 		if err != nil {
 			return nil, err
@@ -89,7 +95,7 @@ func New(cfg Config) (*Meshnet, error) {
 }
 
 func (m *Meshnet) Serve() error {
-	log.Infof("GRPC server has started on port: %d", m.config.Port)
+	mnetdLogger.Infof("GRPC server has started on port: %d", m.config.Port)
 	return m.s.Serve(m.lis)
 }
 
