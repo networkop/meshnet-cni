@@ -7,6 +7,7 @@ import (
 
 	"github.com/networkop/meshnet-cni/daemon/grpcwire"
 	"github.com/networkop/meshnet-cni/daemon/vxlan"
+	"github.com/networkop/meshnet-cni/utils/wireutil"
 
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -277,6 +278,15 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 			"overlay": "gRPC",
 		}).Errorf("[ADD-WIRE:LOCAL-END]For pod %s failed to retrieve interface ID for interface %v. error:%v", wireDef.LocalPodName, wireDef.VethNameLocalHost, err)
 		return &mpb.BoolResponse{Response: false}, err
+	}
+
+	// update tx checksuming to off
+	err = wireutil.SetTxChecksumOff(wireDef.IntfNameInPod, wireDef.LocalPodNetNs)
+	if err != nil {
+		log.Errorf("Error in setting tx checksum-off on interface %s, ns %s, pod %s: %v", wireDef.IntfNameInPod, wireDef.LocalPodNetNs, wireDef.LocalPodName, err)
+		// not returning
+	} else {
+		log.Infof("Setting tx checksum-off on interface %s, pod %s is successful", wireDef.IntfNameInPod, wireDef.LocalPodName)
 	}
 
 	//Using google gopacket for packet receive. An alternative could be using socket. Not sure it it provides any advantage over gopacket.

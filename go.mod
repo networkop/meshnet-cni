@@ -19,6 +19,8 @@ require (
 	k8s.io/client-go v0.21.1
 )
 
+require github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
+
 require (
 	github.com/Microsoft/go-winio v0.4.11 // indirect
 	github.com/docker/distribution v0.0.0-20181024170156-93e082742a00 // indirect
