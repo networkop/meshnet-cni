@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	mpb "github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
+	"github.com/networkop/meshnet-cni/utils/wireutil"
 )
 
 const (
@@ -305,6 +306,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 						continue
 					}
 				}
+				if err := wireutil.SetTxChecksumOff(myVeth.LinkName, myVeth.NsName); err != nil {
+					log.Errorf("Error in setting tx checksum-off on interface %s, ns %s, pod %s: %v", myVeth.LinkName, myVeth.NsName, localPod.Name, err)
+					// not returning
+				}
+				if err := wireutil.SetTxChecksumOff(peerVeth.LinkName, peerVeth.NsName); err != nil {
+					log.Errorf("Error in setting tx checksum-off on interface %s, ns %s, pod %s: %v", peerVeth.LinkName, peerVeth.NsName, peerPod.Name, err)
+					// not returning
+				}
+
 			} else { // This means we're on different hosts
 				log.Infof("%s@%s and %s@%s are on different hosts", localPod.Name, localPod.SrcIp, peerPod.Name, peerPod.SrcIp)
 				if interNodeLinkType == INTER_NODE_LINK_GRPC {
