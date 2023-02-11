@@ -5,7 +5,7 @@ WORKDIR /src
 
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-RUN go install github.com/bufbuild/buf/cmd/buf@latest
+RUN go install github.com/bufbuild/buf/cmd/buf@v1.13.1
 
 COPY daemon/proto .
 COPY buf.gen.yaml .
