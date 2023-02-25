@@ -23,7 +23,7 @@ require github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
 
 require (
 	github.com/Microsoft/go-winio v0.4.11 // indirect
-	github.com/docker/distribution v0.0.0-20181024170156-93e082742a00 // indirect
+	github.com/docker/distribution v2.8.0+incompatible // indirect
 	github.com/docker/docker v0.0.0-20181024220401-bc4c1c238b55 // indirect
 	github.com/docker/go-connections v0.0.0-20180228141015-7395e3f8aa16 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
