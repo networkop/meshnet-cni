@@ -1,4 +1,4 @@
-// Copyright 2023 Google LLC
+// Copyright 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -111,7 +111,7 @@ func (t *topologyClient) List(ctx context.Context, opts metav1.ListOptions) (*to
 		return nil, err
 	}
 	result := topologyv1.TopologyList{}
-	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &result); err != nil {
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &result); err != nil {
 		return nil, fmt.Errorf("failed to type assert return to TopologyList: %w", err)
 	}
 	return &result, nil
@@ -123,7 +123,7 @@ func (t *topologyClient) Get(ctx context.Context, name string, opts metav1.GetOp
 		return nil, err
 	}
 	result := topologyv1.Topology{}
-	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &result); err != nil {
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &result); err != nil {
 		return nil, fmt.Errorf("failed to type assert return to Topology: %w", err)
 	}
 	return &result, nil
@@ -147,7 +147,7 @@ func (t *topologyClient) Create(ctx context.Context, topology *topologyv1.Topolo
 		return nil, err
 	}
 	result := topologyv1.Topology{}
-	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &result); err != nil {
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &result); err != nil {
 		return nil, fmt.Errorf("failed to type assert return to Topology: %w", err)
 	}
 	return &result, nil
@@ -168,7 +168,7 @@ func (t *topologyClient) Update(ctx context.Context, obj *unstructured.Unstructu
 		return nil, err
 	}
 	result := topologyv1.Topology{}
-	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &result); err != nil {
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &result); err != nil {
 		return nil, fmt.Errorf("failed to type assert return to Topology: %w", err)
 	}
 	return &result, nil
