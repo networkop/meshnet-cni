@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2023 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,15 +26,16 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
-	topologyv1 "github.com/networkop/meshnet-cni/api/types/v1beta1"
+	topologyv1 "github.com/openconfig/kne/api/types/v1beta1"
 )
 
 // TopologyInterface provides access to the Topology CRD.
 type TopologyInterface interface {
 	List(ctx context.Context, opts metav1.ListOptions) (*topologyv1.TopologyList, error)
-	Get(ctx context.Context, name string, options metav1.GetOptions) (*topologyv1.Topology, error)
-	Create(ctx context.Context, topology *topologyv1.Topology) (*topologyv1.Topology, error)
+	Get(ctx context.Context, name string, opts metav1.GetOptions) (*topologyv1.Topology, error)
+	Create(ctx context.Context, topology *topologyv1.Topology, opts metav1.CreateOptions) (*topologyv1.Topology, error)
 	Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error
 	Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error)
 	Unstructured(ctx context.Context, name string, opts metav1.GetOptions, subresources ...string) (*unstructured.Unstructured, error)
@@ -49,19 +50,33 @@ type Interface interface {
 // Clientset is a client for the topology crds.
 type Clientset struct {
 	dInterface dynamic.NamespaceableResourceInterface
-	restClient rest.Interface
 }
 
 var gvr = schema.GroupVersionResource{
-	Group:    "networkop.co.uk",
-	Version:  "v1beta1",
+	Group:    topologyv1.GroupName,
+	Version:  topologyv1.GroupVersion,
 	Resource: "topologies",
+}
+
+func GVR() schema.GroupVersionResource {
+	return gvr
+}
+
+var (
+	groupVersion = &schema.GroupVersion{
+		Group:   topologyv1.GroupName,
+		Version: topologyv1.GroupVersion,
+	}
+)
+
+func GV() *schema.GroupVersion {
+	return groupVersion
 }
 
 // NewForConfig returns a new Clientset based on c.
 func NewForConfig(c *rest.Config) (*Clientset, error) {
 	config := *c
-	config.ContentConfig.GroupVersion = &schema.GroupVersion{Group: topologyv1.GroupName, Version: topologyv1.GroupVersion}
+	config.ContentConfig.GroupVersion = groupVersion
 	config.APIPath = "/apis"
 	config.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
 	config.UserAgent = rest.DefaultKubernetesUserAgent()
@@ -70,108 +85,95 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 		return nil, err
 	}
 	dInterface := dClient.Resource(gvr)
-	rClient, err := rest.RESTClientFor(&config)
-	if err != nil {
-		return nil, err
-	}
-	return &Clientset{
-		dInterface: dInterface,
-		restClient: rClient,
-	}, nil
+	return &Clientset{dInterface: dInterface}, nil
+}
+
+// SetDynamicClient is only exposed for integration testing.
+func (c *Clientset) SetDynamicClient(d dynamic.NamespaceableResourceInterface) {
+	c.dInterface = d
 }
 
 func (c *Clientset) Topology(namespace string) TopologyInterface {
 	return &topologyClient{
 		dInterface: c.dInterface,
-		restClient: c.restClient,
 		ns:         namespace,
 	}
 }
 
 type topologyClient struct {
 	dInterface dynamic.NamespaceableResourceInterface
-	restClient rest.Interface
 	ns         string
 }
 
 func (t *topologyClient) List(ctx context.Context, opts metav1.ListOptions) (*topologyv1.TopologyList, error) {
+	u, err := t.dInterface.Namespace(t.ns).List(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
 	result := topologyv1.TopologyList{}
-	err := t.restClient.
-		Get().
-		Namespace(t.ns).
-		Resource("topologies").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Do(ctx).
-		Into(&result)
-
-	return &result, err
+	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &result); err != nil {
+		return nil, fmt.Errorf("failed to type assert return to TopologyList: %w", err)
+	}
+	return &result, nil
 }
 
 func (t *topologyClient) Get(ctx context.Context, name string, opts metav1.GetOptions) (*topologyv1.Topology, error) {
+	u, err := t.dInterface.Namespace(t.ns).Get(ctx, name, opts)
+	if err != nil {
+		return nil, err
+	}
 	result := topologyv1.Topology{}
-	err := t.restClient.
-		Get().
-		Namespace(t.ns).
-		Resource("topologies").
-		Name(name).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Do(ctx).
-		Into(&result)
-
-	return &result, err
+	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &result); err != nil {
+		return nil, fmt.Errorf("failed to type assert return to Topology: %w", err)
+	}
+	return &result, nil
 }
 
-func (t *topologyClient) Create(ctx context.Context, topology *topologyv1.Topology) (*topologyv1.Topology, error) {
+func (t *topologyClient) Create(ctx context.Context, topology *topologyv1.Topology, opts metav1.CreateOptions) (*topologyv1.Topology, error) {
+	gvk, err := apiutil.GVKForObject(topology, topologyv1.Scheme)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get gvk for Topology: %w", err)
+	}
+	topology.TypeMeta = metav1.TypeMeta{
+		Kind:       gvk.Kind,
+		APIVersion: gvk.GroupVersion().String(),
+	}
+	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(topology)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert Topology to unstructured: %w", err)
+	}
+	u, err := t.dInterface.Namespace(t.ns).Create(ctx, &unstructured.Unstructured{Object: obj}, opts)
+	if err != nil {
+		return nil, err
+	}
 	result := topologyv1.Topology{}
-	err := t.restClient.
-		Post().
-		Namespace(t.ns).
-		Resource("topologies").
-		Body(topology).
-		Do(ctx).
-		Into(&result)
-
-	return &result, err
+	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &result); err != nil {
+		return nil, fmt.Errorf("failed to type assert return to Topology: %w", err)
+	}
+	return &result, nil
 }
 
 func (t *topologyClient) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
 	opts.Watch = true
-	return t.restClient.
-		Get().
-		Namespace(t.ns).
-		Resource("topologies").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Watch(ctx)
+	return t.dInterface.Namespace(t.ns).Watch(ctx, opts)
 }
 
 func (t *topologyClient) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
-	return t.restClient.
-		Delete().
-		Namespace(t.ns).
-		Resource("topologies").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Name(name).
-		Do(ctx).
-		Error()
+	return t.dInterface.Namespace(t.ns).Delete(ctx, name, opts)
 }
 
 func (t *topologyClient) Update(ctx context.Context, obj *unstructured.Unstructured, opts metav1.UpdateOptions) (*topologyv1.Topology, error) {
-	result := topologyv1.Topology{}
 	obj, err := t.dInterface.Namespace(t.ns).UpdateStatus(ctx, obj, metav1.UpdateOptions{})
 	if err != nil {
 		return nil, err
 	}
-	err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to type assert return to topology")
+	result := topologyv1.Topology{}
+	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &result); err != nil {
+		return nil, fmt.Errorf("failed to type assert return to Topology: %w", err)
 	}
 	return &result, nil
 }
 
 func (t *topologyClient) Unstructured(ctx context.Context, name string, opts metav1.GetOptions, subresources ...string) (*unstructured.Unstructured, error) {
 	return t.dInterface.Namespace(t.ns).Get(ctx, name, opts, subresources...)
-}
-
-func init() {
-	topologyv1.AddToScheme(scheme.Scheme)
 }
