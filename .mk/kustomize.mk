@@ -1,9 +1,9 @@
 .PHONY: kust-install
-kust-install: 
-	go get sigs.k8s.io/kustomize/kustomize/v3
+kust-install:
+	go install sigs.k8s.io/kustomize/kustomize/v3@v3.10.0
 
-.PHONY: kust-ensure 
-kust-ensure: 
+.PHONY: kust-ensure
+kust-ensure:
 	@which $(GOPATH)/bin/kustomize >/dev/null 2>&1 || \
 		make kust-install
 
@@ -15,5 +15,5 @@ kustomize: kust-ensure
 
 
 .PHONY: kustomize-kops
-kustomize-kops: kust-ensure 
-	kubectl apply -k manifests/overlays/kops/ 
+kustomize-kops: kust-ensure
+	kubectl apply -k manifests/overlays/kops/
