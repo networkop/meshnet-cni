@@ -1,6 +1,6 @@
 .PHONY: kust-install
 kust-install:
-	go install sigs.k8s.io/kustomize/kustomize/v3@v3.10.0
+	go install sigs.k8s.io/kustomize/kustomize/v5@v5.0.0
 
 .PHONY: kust-ensure
 kust-ensure:
