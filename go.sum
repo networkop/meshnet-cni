@@ -271,8 +271,9 @@ github.com/openconfig/gnmi v0.0.0-20220920173703-480bf53a74d2 h1:3YLlQFLDsFTvruK
 github.com/openconfig/gnmi v0.0.0-20220920173703-480bf53a74d2/go.mod h1:Y9os75GmSkhHw2wX8sMsxfI7qRGAEcDh8NTa5a8vj6E=
 github.com/opencontainers/go-digest v0.0.0-20170607195333-279bed98673d h1:KdbiNxiNlvqqdRGoWqPq40QvJVnkx0i6boW43dg6Zig=
 github.com/opencontainers/go-digest v0.0.0-20170607195333-279bed98673d/go.mod h1:cMLVZDEM3+U2I4VmLI6N8jQYUd2OVphdqWwCJHrFt2s=
-github.com/opencontainers/image-spec v0.0.0-20171030174740-d60099175f88 h1:wHUCmBJYWVPLW+A+82bEi7lJpaUFvUUrJGpBYUvHTYE=
 github.com/opencontainers/image-spec v0.0.0-20171030174740-d60099175f88/go.mod h1:BtxoFyWECRxE4U/7sNtV5W15zMzWCbyJoFRP3s7yZA0=
+github.com/opencontainers/image-spec v1.0.2 h1:9yCKha/T5XdGtO0q9Q9a6T5NUCsTn/DrBg0D7ufOcFM=
+github.com/opencontainers/image-spec v1.0.2/go.mod h1:BtxoFyWECRxE4U/7sNtV5W15zMzWCbyJoFRP3s7yZA0=
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
 github.com/pkg/errors v0.0.0-20160929014801-645ef00459ed/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
