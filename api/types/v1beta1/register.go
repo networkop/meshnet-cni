@@ -20,22 +20,21 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-const GroupName = "networkop.co.uk"
-const GroupVersion = "v1beta1"
-
-var SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: GroupVersion}
-
-var (
-	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
-	AddToScheme   = SchemeBuilder.AddToScheme
+const (
+	GroupName    = "networkop.co.uk"
+	GroupVersion = "v1beta1"
 )
 
-func addKnownTypes(scheme *runtime.Scheme) error {
-	scheme.AddKnownTypes(SchemeGroupVersion,
+var (
+	SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: GroupVersion}
+	Scheme             = runtime.NewScheme()
+)
+
+func init() {
+	Scheme.AddKnownTypes(SchemeGroupVersion,
 		&Topology{},
 		&TopologyList{},
 	)
-
-	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
-	return nil
+	metav1.AddToGroupVersion(Scheme, SchemeGroupVersion)
+	metav1.AddMetaToScheme(Scheme)
 }

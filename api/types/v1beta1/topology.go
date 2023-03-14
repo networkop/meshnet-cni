@@ -18,20 +18,15 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 //go:generate controller-gen object paths=$GOFILE
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type TopologySpec struct {
 	metav1.TypeMeta `json:",inline"`
 	Links           []Link `json:"links"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type TopologyStatus struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
 	Skipped []string `json:"skipped"`
-	SrcIp   string   `json:"src_ip"`
-	NetNs   string   `json:"net_ns"`
+	SrcIP   string   `json:"src_ip"`
+	NetNS   string   `json:"net_ns"`
 }
 
 type Link struct {
