@@ -89,6 +89,7 @@ type GRPCWire struct {
 	OriginatorIP string             // IP address of the host created it. This is for debugging.
 
 	StopC chan struct{} // the channel to send stop signal to the receive thread.
+	mu    sync.Mutex
 }
 
 type linkKey struct {
@@ -100,6 +101,17 @@ type wireMap struct {
 	mu      sync.Mutex
 	wires   map[linkKey]*GRPCWire
 	handles map[int64]*pcap.Handle
+}
+
+// update the ware with the given input and mark the wire ready
+func (wire *GRPCWire) UpdateWire(peerIntfId int64, stopC chan struct{}) {
+	wire.mu.Lock()
+	defer wire.mu.Unlock()
+	wire.StopC = stopC
+	if !wire.IsReady {
+		wire.PeerIfaceID = peerIntfId
+		wire.IsReady = true
+	}
 }
 
 func (w *wireMap) GetWire(namespace string, linkUID int) (*GRPCWire, bool) {
@@ -144,6 +156,7 @@ func (w *wireMap) Add(wire *GRPCWire, handle *pcap.Handle) error {
 	return nil
 }
 
+// Delete a wire from the in-memory wire-map under a lock
 func (w *wireMap) Delete(wire *GRPCWire) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -151,6 +164,7 @@ func (w *wireMap) Delete(wire *GRPCWire) error {
 	return err
 }
 
+// Delete a wire from the in-memory wire-map without a lock
 func (w *wireMap) DeleteWoLock(wire *GRPCWire) error {
 	delete(w.wires, linkKey{
 		namespace: wire.LocalPodNetNS,
@@ -197,7 +211,7 @@ func GetWireByUID(namespace string, linkUID int) (*GRPCWire, bool) {
 
 //-------------------------------------------------------------------------------------------------
 
-// getOrUpdateWireByUID returns wire matching the provided namespace and linkUID.
+// For the give link UID update the wire structure in the map, set it active and return the updated wire structure.
 func getOrUpdateWireByUID(namespace string, linkUID int, peerIntfId int64) (*GRPCWire, bool) {
 	wires.mu.Lock()
 	defer wires.mu.Unlock()
@@ -220,9 +234,8 @@ func getOrUpdateWireByUID(namespace string, linkUID int, peerIntfId int64) (*GRP
 
 //-------------------------------------------------------------------------------------------------
 
-// WireDownByUID returns wire matching the provided namespace and linkUID.
+// WireDownByUID - stops packet collection form the connected pod
 func WireDownByUID(namespace string, linkUID int) error {
-	//return wires.GetWire(namespace, linkUID)
 	wires.mu.Lock()
 	defer wires.mu.Unlock()
 
@@ -233,9 +246,7 @@ func WireDownByUID(namespace string, linkUID int) error {
 	if ok {
 		grpcOvrlyLogger.Infof("WireDownByUID: Making wire down from db, %s@%s-%s@%d, peer fid %d, link uid %d",
 			wire.LocalPodName, wire.LocalPodIfaceName, wire.LocalNodeIfaceName, wire.LocalNodeIfaceID, wire.PeerIfaceID, linkUID)
-		if wire.IsReady { // explain it later why this condition here
-			grpcOvrlyLogger.Infof("WireDownByUID: Closing recv thread %s@%s-%s@%d, peer fid %d, link uid %d",
-				wire.LocalPodName, wire.LocalPodIfaceName, wire.LocalNodeIfaceName, wire.LocalNodeIfaceID, wire.PeerIfaceID, linkUID)
+		if wire.IsReady { //+++rev: explain it later why this condition here
 			close(wire.StopC)
 		}
 		wire.IsReady = false
@@ -286,6 +297,7 @@ func WireDownByUID(namespace string, linkUID int) error {
 //}
 
 // -------------------------------------------------------------------------------------------------
+// Add a wire in the in memory wire map
 func AddWire(wire *GRPCWire, handle *pcap.Handle) int {
 	/* Populate the active wire map and returns the number of currently added active wires. */
 
@@ -420,25 +432,36 @@ func GenNodeIfaceName(podName string, podIfaceName string) (string, error) {
 }
 
 // -----------------------------------------------------------------------------------------------------------
-// When the remote peer tells the local node to create the local end of the grpc-wire
-func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*GRPCWire, error) {
+// When the remote peer tells the local node to create the local end of the grpc-wire.
+// If the wire is already created the update the wire properties (like updating the stop channel). This updation
+// can happen a deleted pod is recreated again. This is not very uncommon in K8S
+func CreateUpdateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*GRPCWire, error) {
 
 	var err error
 
-	/* If this link already created then do nothing. This can happen due to a race between the local and remote peer.
-	   We will allow only one to complete the creation. */
-	grpcWire, ok := getOrUpdateWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid), wireDef.PeerIntfId)
+	// If this wire is already created then only update the already created wire properties like stopC.
+	// This can happen due to a race between the local and remote peer.
+	// This can also happen when a pod in one end of the wire is deleted and created again.
+	// In all cases link creation happen only once but it can get updated multiple times.
+	grpcWire, ok := GetWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid))
 	if ok {
-		grpcWire.StopC = stopC
-		if grpcWire.IsReady {
-			grpcOvrlyLogger.Infof("[ADD-WIRE:REMOTE-END] This grpc-wire is already created by %s. Local interface id : %d peer interface id : %d", grpcWire.Originator, grpcWire.LocalNodeIfaceID, grpcWire.PeerIfaceID)
-			return grpcWire, nil
-		} else {
-			grpcOvrlyLogger.Infof("[ADD-WIRE:REMOTE-END] Making up this grpc-wire created by %s. Local interface id : %d peer interface id : %d",
-				grpcWire.Originator, grpcWire.LocalNodeIfaceID, grpcWire.PeerIfaceID)
-			return grpcWire, nil
-		}
+		grpcWire.UpdateWire(wireDef.PeerIntfId, stopC)
+		grpcOvrlyLogger.Infof("[ADD-WIRE] At remote end this grpc-wire is already created by %s. Local interface id : %d peer interface id : %d", grpcWire.Originator, grpcWire.LocalNodeIfaceID, grpcWire.PeerIfaceID)
+		return grpcWire, nil
 	}
+
+	// grpcWire, ok := getOrUpdateWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid), wireDef.PeerIntfId)
+	// if ok {
+	// 	grpcWire.StopC = stopC
+	// 	if grpcWire.IsReady {
+	// 		grpcOvrlyLogger.Infof("[ADD-WIRE:REMOTE-END] This grpc-wire is already created by %s. Local interface id : %d peer interface id : %d", grpcWire.Originator, grpcWire.LocalNodeIfaceID, grpcWire.PeerIfaceID)
+	// 		return grpcWire, nil
+	// 	} else {
+	// 		grpcOvrlyLogger.Infof("[ADD-WIRE:REMOTE-END] Making up this grpc-wire created by %s. Local interface id : %d peer interface id : %d",
+	// 			grpcWire.Originator, grpcWire.LocalNodeIfaceID, grpcWire.PeerIfaceID)
+	// 		return grpcWire, nil
+	// 	}
+	// }
 
 	outIfNm, err := GenNodeIfaceName(wireDef.LocalPodName, wireDef.IntfNameInPod)
 	if err != nil {
@@ -484,10 +507,11 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 	}
 	locIface, err := net.InterfaceByName(hostEndVeth.LinkName)
 	if err != nil {
-		grpcOvrlyLogger.Errorf("[ADD-WIRE:REMOTE-END] Could not get interface index for %s. error:%v", hostEndVeth.LinkName, err)
+		// let the caller handle the error
+		grpcOvrlyLogger.Errorf("[ADD-WIRE] Remote end could not get interface index for %s. error:%v", hostEndVeth.LinkName, err)
 		return nil, err
 	}
-	grpcOvrlyLogger.Infof("[ADD-WIRE:REMOTE-END] Trigger from %s:%d : Successfully created pod to node vEth pair %s@%s <--> %s(%d).",
+	grpcOvrlyLogger.Infof("[ADD-WIRE] Trigger from %s:%d : Successfully created remote pod to node vEth pair %s@%s <--> %s(%d).",
 		wireDef.PeerIp, wireDef.PeerIntfId, inIfNm, wireDef.LocalPodName, outIfNm, locIface.Index)
 	aWire := &GRPCWire{
 		UID: int(wireDef.LinkUid),
@@ -518,18 +542,13 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 	*/
 	wrHandle, err := pcap.OpenLive(hostEndVeth.LinkName, 65365, true, pcap.BlockForever)
 	if err != nil {
-		grpcOvrlyLogger.Errorf("[ADD-WIRE:REMOTE-END] Could not open interface (%d) for sed/recv packets for containers. error:%v", locIface.Index, err)
+		// let the caller handle the error
+		grpcOvrlyLogger.Errorf("[ADD-WIRE] At remote end could not open interface (%d) for sed/recv packets for containers. error:%v", locIface.Index, err)
 		return nil, err
 	}
 
+	// Add the created wire in the in memory wire-map
 	AddWire(aWire, wrHandle)
-
-	//gWire, ok := GetWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid))
-	//if ok {
-	//	grpcOvrlyLogger.Infof("[ADD-WIRE:REMOTE-END] Added wire info, %s@%s-%s@%d-%d", gWire.LocalPodName, gWire.LocalPodIfaceName, gWire.LocalNodeIfaceName, gWire.LocalNodeIfaceID, gWire.PeerIfaceID)
-	//} else {
-	//	grpcOvrlyLogger.Errorf("ERROR: [ADD-WIRE:REMOTE-END] Did not find added wire info, %s@%s@%d-%d", wireDef.LocalPodName, wireDef.IntfNameInPod, locIface.Index, wireDef.PeerIntfId)
-	//}
 
 	return aWire, nil
 }
@@ -540,7 +559,7 @@ func GRPCWireDownRemoteTriggered(wireDef *mpb.WireDef) error {
 
 	err := WireDownByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid))
 	if err != nil {
-		grpcOvrlyLogger.Infof("[DOWN-WIRE:REMOTE-END] Failed in making down wire end in pod %s@%s,. Link uid : %d",
+		grpcOvrlyLogger.Infof("[WIRE-DOWN] Remote end failed in making down wire end in pod %s@%s,. Link uid : %d",
 			wireDef.LocalPodName, wireDef.IntfNameInPod, wireDef.LinkUid)
 		return nil
 	}
@@ -565,12 +584,13 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 
 	_, err := net.InterfaceByName(wire.LocalNodeIfaceName)
 	if err != nil {
-		grpcOvrlyLogger.Errorf("[ADD-WIRE:LOCAL-END]For pod %s failed to retrieve interface %s/%d. error: %v", wire.LocalPodName, wire.LocalNodeIfaceName, wire.LocalNodeIfaceID, err)
+		grpcOvrlyLogger.Errorf("[Packet Receive thread]For pod %s failed to retrieve interface %s/%d. error: %v", wire.LocalPodName, wire.LocalNodeIfaceName, wire.LocalNodeIfaceID, err)
 		return err
 	}
 
 	rdHandl, err := pcap.OpenLive(wire.LocalNodeIfaceName, pktBuffSz, true, pcap.BlockForever)
 	if err != nil {
+		// let the caller handle the error
 		grpcOvrlyLogger.Errorf("Receive Thread for local pod failed to open interface: %s/%d, PCAP ERROR: %v", wire.LocalNodeIfaceName, wire.LocalNodeIfaceID, err)
 		return err
 	}
@@ -578,6 +598,7 @@ func RecvFrmLocalPodThread(wire *GRPCWire) error {
 
 	err = rdHandl.SetDirection(pcap.Direction(pcap.DirectionIn))
 	if err != nil {
+		// let the caller handle the error
 		grpcOvrlyLogger.Errorf("Receive Thread for local pod failed to set up capture direction: %s/%d, PCAP ERROR: %v", wire.LocalNodeIfaceName, wire.LocalNodeIfaceID, err)
 		return err
 	}
