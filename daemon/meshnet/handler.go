@@ -120,7 +120,22 @@ func (m *Meshnet) Skip(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolRespo
 
 		skipped, _, _ := unstructured.NestedSlice(result.Object, "status", "skipped")
 
-		newSkipped := append(skipped, skip.Peer)
+		// If the pod is already present in skipped list we don't need to append it again
+		var found bool = false
+		for _, el := range skipped {
+			elString, ok := el.(string)
+			if ok {
+				if elString == skip.Peer {
+					found = true
+					break
+				}
+			}
+		}
+
+		newSkipped := skipped
+		if !found {
+			newSkipped = append(newSkipped, skip.Peer)
+		}
 
 		if err := unstructured.SetNestedField(result.Object, newSkipped, "status", "skipped"); err != nil {
 			mnetdLogger.Errorf("Failed to updated skipped list")
@@ -156,7 +171,22 @@ func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.Bo
 
 		// extracting peer pod's skipped list and adding this pod's name to it
 		peerSkipped, _, _ := unstructured.NestedSlice(peerPod.Object, "status", "skipped")
-		newPeerSkipped := append(peerSkipped, skip.Pod)
+
+		// If the pod is already present in skipped list we don't need to append it again
+		found := false
+		for _, el := range peerSkipped {
+			elString, ok := el.(string)
+			if ok {
+				if elString == skip.Pod {
+					found = true
+					break
+				}
+			}
+		}
+		newPeerSkipped := peerSkipped
+		if !found {
+			newPeerSkipped = append(newPeerSkipped, skip.Pod)
+		}
 
 		mnetdLogger.Infof("Updating peer skipped list")
 		// updating peer pod's skipped list locally
@@ -295,7 +325,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 		log.WithFields(log.Fields{
 			"daemon":  "meshnetd",
 			"overlay": "gRPC",
-		}).Fatalf("[ADD-WIRE:LOCAL-END]Could not open interface for send/recv packets for containers. error:%v", err)
+		}).Errorf("[ADD-WIRE:LOCAL-END]Could not open interface for send/recv packets for containers. error:%v", err)
 		return &mpb.BoolResponse{Response: false}, err
 	}
 
@@ -324,7 +354,15 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 	log.WithFields(log.Fields{
 		"daemon":  "meshnetd",
 		"overlay": "gRPC",
-	}).Infof("[ADD-WIRE:LOCAL-END]For pod %s@%s starting the local packet receive thread", wireDef.LocalPodName, wireDef.IntfNameInPod)
+	}).Infof("[ADD-WIRE:LOCAL-END]For pod %s@%s-%s starting the local packet receive thread, remote ifid %d",
+		wireDef.LocalPodName, wireDef.IntfNameInPod, wireDef.VethNameLocalHost, wireDef.PeerIntfId)
+
+	//gWire, ok := grpcwire.GetWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid))
+	//if ok {
+	//	mnetdLogger.Infof("[ADD-WIRE:LOCAL-END] Added wire info, %s@%s-%s@%d-%d", gWire.LocalPodName, gWire.LocalPodIfaceName, gWire.LocalNodeIfaceName, gWire.LocalNodeIfaceID, gWire.PeerIfaceID)
+	//} else {
+	//	mnetdLogger.Errorf("ERROR: [ADD-WIRE:LOCAL-END] Did not find added wire info, %s@%s@%d-%d", wireDef.LocalPodName, wireDef.IntfNameInPod, locInf.Index, wireDef.PeerIntfId)
+	//}
 	// TODO: handle error here
 	go grpcwire.RecvFrmLocalPodThread(&aWire)
 
@@ -377,6 +415,23 @@ func (m *Meshnet) AddGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (
 		"overlay": "gRPC",
 	}).Errorf("[ADD-WIRE:REMOTE-END] err: %v", err)
 	return &mpb.WireCreateResponse{Response: false, PeerIntfId: wireDef.PeerIntfId}, err
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+func (m *Meshnet) DownGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (*mpb.WireDownResponse, error) {
+	err := grpcwire.DownGRPCWireRemoteTriggered(wireDef)
+	if err == nil {
+		log.WithFields(log.Fields{
+			"daemon":  "meshnetd",
+			"overlay": "gRPC",
+		}).Infof("[DOWN-WIRE:REMOTE-END]Successfully made down grpc wire end for pod %s@%s", wireDef.LocalPodName, wireDef.IntfNameInPod)
+		return &mpb.WireDownResponse{Response: true}, nil
+	}
+	log.WithFields(log.Fields{
+		"daemon":  "meshnetd",
+		"overlay": "gRPC",
+	}).Errorf("[DOWN-WIRE:REMOTE-END] err: %v", err)
+	return &mpb.WireDownResponse{Response: false}, err
 }
 
 // ---------------------------------------------------------------------------------------------------------------
