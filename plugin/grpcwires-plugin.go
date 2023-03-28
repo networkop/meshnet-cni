@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	skipStatusRetryInterval  = 2 // sec
-	skipStatusRetryWarnCount = 5
-	skipStatusRetryCount     = skipStatusRetryWarnCount + 15
+	skipStatusRetryInterval  = 2                            // sec
+	skipStatusRetryWarnCount = 5                            // generate a warning while continuing further
+	skipStatusRetryCount     = skipStatusRetryWarnCount * 4 // how many times to retry
 )
 
 // --------------------------------------------------------------------------------------------------------
@@ -68,7 +68,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		ticker := time.NewTicker(time.Second * skipStatusRetryInterval)
 		defer ticker.Stop()
 
-		iteration := 0
+		iteration := 1
 		for range ticker.C {
 			// Check if it has created the wire while we were waiting
 			resp, err := localClient.GRPCWireExists(ctx, &wireDef)
@@ -249,12 +249,13 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 	return nil
 }
 
+// This function is called when a K8S pod is getting deleted.
 func MakeGRPCChanDown(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, ctx context.Context) error {
 	if link == nil {
 		return fmt.Errorf("can't remove remote grpc info. link not provided. link:%p", link)
 	}
 
-	/* Dial the remote peer to down the remote grpc wire end */
+	/* Dial the remote peer to bring down the remote grpc wire end */
 
 	url := fmt.Sprintf("%s:%s", peerPod.SrcIp, defaultPort)
 	url = strings.TrimSpace(url)
@@ -265,7 +266,7 @@ func MakeGRPCChanDown(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, ctx c
 	remoteClient := mpb.NewRemoteClient(remote)
 
 	wireDefRemot := mpb.WireDef{
-		PeerIp:        localPod.SrcIp,
+		PeerIp:        localPod.SrcIp, // for remote pod this pod is the peer pod
 		IntfNameInPod: link.PeerIntf,
 		LocalPodNetNs: peerPod.NetNs,
 		LocalPodName:  peerPod.Name,
@@ -279,7 +280,7 @@ func MakeGRPCChanDown(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, ctx c
 	log.Infof("MakeGRPCChanDown: dialing remote node-->%s@%s", peerPod.Name, url)
 	removeResp, err := remoteClient.DownGRPCWireRemote(ctx, &wireDefRemot)
 	if err != nil {
-		return fmt.Errorf("MakeGRPCChanDown: failed to make down remote grpc wire end: %s, err:%v", url, err)
+		return fmt.Errorf("MakeGRPCChanDown: GRPC communication error for : %s, err:%v", url, err)
 	} else if !removeResp.Response {
 		return fmt.Errorf("MakeGRPCChanDown: remote end of the grpc-wire (local-pod:%s:%s@node:%s <----link uid: %d----> remote-pod:%s:%s@node:%s) is not down",
 			localPod.Name, link.LocalIntf, localPod.SrcIp,

@@ -132,6 +132,7 @@ func (m *Meshnet) Skip(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolRespo
 			}
 		}
 
+		// When not present then append into the skip list otherwise continue without modification
 		newSkipped := skipped
 		if !found {
 			newSkipped = append(newSkipped, skip.Peer)
@@ -183,6 +184,7 @@ func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.Bo
 				}
 			}
 		}
+		// When not present then append into the skip list otherwise continue without modification
 		newPeerSkipped := peerSkipped
 		if !found {
 			newPeerSkipped = append(newPeerSkipped, skip.Pod)
@@ -322,6 +324,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 	//Using google gopacket for packet receive. An alternative could be using socket. Not sure it it provides any advantage over gopacket.
 	wrHandle, err := pcap.OpenLive(wireDef.VethNameLocalHost, 65365, true, pcap.BlockForever)
 	if err != nil {
+		// Let the caller handle the error.
 		log.WithFields(log.Fields{
 			"daemon":  "meshnetd",
 			"overlay": "gRPC",
@@ -357,12 +360,6 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 	}).Infof("[ADD-WIRE:LOCAL-END]For pod %s@%s-%s starting the local packet receive thread, remote ifid %d",
 		wireDef.LocalPodName, wireDef.IntfNameInPod, wireDef.VethNameLocalHost, wireDef.PeerIntfId)
 
-	//gWire, ok := grpcwire.GetWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid))
-	//if ok {
-	//	mnetdLogger.Infof("[ADD-WIRE:LOCAL-END] Added wire info, %s@%s-%s@%d-%d", gWire.LocalPodName, gWire.LocalPodIfaceName, gWire.LocalNodeIfaceName, gWire.LocalNodeIfaceID, gWire.PeerIfaceID)
-	//} else {
-	//	mnetdLogger.Errorf("ERROR: [ADD-WIRE:LOCAL-END] Did not find added wire info, %s@%s@%d-%d", wireDef.LocalPodName, wireDef.IntfNameInPod, locInf.Index, wireDef.PeerIntfId)
-	//}
 	// TODO: handle error here
 	go grpcwire.RecvFrmLocalPodThread(&aWire)
 
@@ -419,18 +416,18 @@ func (m *Meshnet) AddGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (
 
 // ---------------------------------------------------------------------------------------------------------------
 func (m *Meshnet) DownGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (*mpb.WireDownResponse, error) {
-	err := grpcwire.DownGRPCWireRemoteTriggered(wireDef)
+	err := grpcwire.GRPCWireDownRemoteTriggered(wireDef)
 	if err == nil {
 		log.WithFields(log.Fields{
 			"daemon":  "meshnetd",
 			"overlay": "gRPC",
-		}).Infof("[DOWN-WIRE:REMOTE-END]Successfully made down grpc wire end for pod %s@%s", wireDef.LocalPodName, wireDef.IntfNameInPod)
+		}).Infof("[WIRE-DOWN]At remote end for pod %s@%s", wireDef.LocalPodName, wireDef.IntfNameInPod)
 		return &mpb.WireDownResponse{Response: true}, nil
 	}
 	log.WithFields(log.Fields{
 		"daemon":  "meshnetd",
 		"overlay": "gRPC",
-	}).Errorf("[DOWN-WIRE:REMOTE-END] err: %v", err)
+	}).Errorf("[WIRE-DOWN]Remote end err: %v", err)
 	return &mpb.WireDownResponse{Response: false}, err
 }
 

@@ -220,8 +220,8 @@ func getOrUpdateWireByUID(namespace string, linkUID int, peerIntfId int64) (*GRP
 
 //-------------------------------------------------------------------------------------------------
 
-// DownWireByUID returns wire matching the provided namespace and linkUID.
-func DownWireByUID(namespace string, linkUID int) error {
+// WireDownByUID returns wire matching the provided namespace and linkUID.
+func WireDownByUID(namespace string, linkUID int) error {
 	//return wires.GetWire(namespace, linkUID)
 	wires.mu.Lock()
 	defer wires.mu.Unlock()
@@ -231,16 +231,16 @@ func DownWireByUID(namespace string, linkUID int) error {
 		linkUID:   linkUID,
 	}]
 	if ok {
-		grpcOvrlyLogger.Infof("DownWireByUID:[WIRE-DOWN]: Making wire down from db, %s@%s-%s@%d, peer fid %d, link uid %d",
+		grpcOvrlyLogger.Infof("WireDownByUID: Making wire down from db, %s@%s-%s@%d, peer fid %d, link uid %d",
 			wire.LocalPodName, wire.LocalPodIfaceName, wire.LocalNodeIfaceName, wire.LocalNodeIfaceID, wire.PeerIfaceID, linkUID)
 		if wire.IsReady { // explain it later why this condition here
-			grpcOvrlyLogger.Infof("DownWireByUID:[WIRE-DOWN]: Closing recvthread %s@%s-%s@%d, peer fid %d, link uid %d",
+			grpcOvrlyLogger.Infof("WireDownByUID: Closing recv thread %s@%s-%s@%d, peer fid %d, link uid %d",
 				wire.LocalPodName, wire.LocalPodIfaceName, wire.LocalNodeIfaceName, wire.LocalNodeIfaceID, wire.PeerIfaceID, linkUID)
 			close(wire.StopC)
 		}
 		wire.IsReady = false
 	} else {
-		grpcOvrlyLogger.Infof("DownWireByUID:[WIRE-DOWN]: Did not find entry to make down from db, uid %d, ns %s",
+		grpcOvrlyLogger.Infof("WireDownByUID: Did not find entry to make down from db, uid %d, ns %s",
 			linkUID, namespace)
 	}
 	return nil
@@ -536,9 +536,9 @@ func CreateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct{}) (*
 
 // -----------------------------------------------------------------------------------------------------------
 // When the remote peer tells the local node to remove the local end of the grpc-wire info
-func DownGRPCWireRemoteTriggered(wireDef *mpb.WireDef) error {
+func GRPCWireDownRemoteTriggered(wireDef *mpb.WireDef) error {
 
-	err := DownWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid))
+	err := WireDownByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid))
 	if err != nil {
 		grpcOvrlyLogger.Infof("[DOWN-WIRE:REMOTE-END] Failed in making down wire end in pod %s@%s,. Link uid : %d",
 			wireDef.LocalPodName, wireDef.IntfNameInPod, wireDef.LinkUid)

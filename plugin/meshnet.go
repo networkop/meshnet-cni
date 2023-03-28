@@ -428,7 +428,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	log.Infof("Del: Retrieving pod's (%s@%s) metadata from meshnet daemon", string(cniArgs.K8S_POD_NAME), string(cniArgs.K8S_POD_NAMESPACE))
 	localPod, err := meshnetClient.Get(ctx, &mpb.PodQuery{
-		Name:   string(cniArgs.K8S_POD_NAME),
+		Name:   string(cniArgs.K8S_POD_NAME), // getting deatils of the curretn pod.
 		KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
 	})
 	if err != nil {
@@ -449,22 +449,26 @@ func cmdDel(args *skel.CmdArgs) error {
 	log.Infof("Del: Iterating over each link for clean-up")
 	for _, link := range localPod.Links { // Iterate over each link of the local pod
 		linkType := "veth"
-		// Initialising peer pod's metadata
+		// Initialising peer pod's metadata. Peer pod information is needed to determine if a link is of type GRPC or VxLAN.
+		// For GRPC link type there is some addtional cleanup work nedd to be perfromed.
 		log.Infof("Del: Pod %s is retrieving peer pod %s information from meshnet daemon", cniArgs.K8S_POD_NAME, link.PeerPod)
 		peerPod, _ := meshnetClient.Get(ctx, &mpb.PodQuery{
-			Name:   link.PeerPod,
+			Name:   link.PeerPod, // getting peer pod detail.
 			KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
 		})
 
 		if peerPod.SrcIp != localPodSrcIp {
 			// they are on different hosts
 			if interNodeLinkType == INTER_NODE_LINK_GRPC {
+				// for this link bring the grpc wire down
 				err = MakeGRPCChanDown(link, localPod, peerPod, ctx)
 				if err != nil {
 					log.Errorf("Del: !! Failed to remove remote grpc wire. err: %v", err)
 					// no return
 				}
 				linkType = "grpc"
+			} else {
+				linkType = "vxlan"
 			}
 		}
 		// Creating koko's Veth struct for local intf
