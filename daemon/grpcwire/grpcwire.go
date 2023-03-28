@@ -209,10 +209,10 @@ func GetWireByUID(namespace string, linkUID int) (*GRPCWire, bool) {
 	return wires.GetWire(namespace, linkUID)
 }
 
-//-------------------------------------------------------------------------------------------------
-
-// For the give link UID update the wire structure in the map, set it active and return the updated wire structure.
-func getOrUpdateWireByUID(namespace string, linkUID int, peerIntfId int64) (*GRPCWire, bool) {
+// -------------------------------------------------------------------------------------------------
+// For the given uid if the wire exists, then update the wire properties.
+// Returns true if a wire exists, also the wire structure that got modified
+func UpdateWireByUID(namespace string, linkUID int, peerIntfId int64, stopC chan struct{}) (*GRPCWire, bool) {
 	wires.mu.Lock()
 	defer wires.mu.Unlock()
 	wire, ok := wires.wires[linkKey{
@@ -220,17 +220,35 @@ func getOrUpdateWireByUID(namespace string, linkUID int, peerIntfId int64) (*GRP
 		linkUID:   linkUID,
 	}]
 	if ok {
-		grpcOvrlyLogger.Infof("getOrUpdateWireByUID:[ADD-WIRE]: wire found %s@%s-%d@%d, link uid %d, is ready %t",
-			wire.LocalPodName, wire.LocalPodIfaceName, wire.LocalNodeIfaceID, wire.PeerIfaceID, linkUID, wire.IsReady)
+		wire.StopC = stopC
 		if !wire.IsReady {
 			wire.PeerIfaceID = peerIntfId
 			wire.IsReady = true
-			grpcOvrlyLogger.Infof("getOrUpdateWireByUID:[ADD-WIRE]: updated wire  %s@%s-%d@%d, link uid %d, is ready %t",
-				wire.LocalPodName, wire.LocalPodIfaceName, wire.LocalNodeIfaceID, wire.PeerIfaceID, linkUID, wire.IsReady)
 		}
 	}
 	return wire, ok
 }
+
+// For the give link UID update the wire structure in the map, set it active and return the updated wire structure.
+// func getOrUpdateWireByUID(namespace string, linkUID int, peerIntfId int64) (*GRPCWire, bool) {
+// 	wires.mu.Lock()
+// 	defer wires.mu.Unlock()
+// 	wire, ok := wires.wires[linkKey{
+// 		namespace: namespace,
+// 		linkUID:   linkUID,
+// 	}]
+// 	if ok {
+// 		grpcOvrlyLogger.Infof("getOrUpdateWireByUID:[ADD-WIRE]: wire found %s@%s-%d@%d, link uid %d, is ready %t",
+// 			wire.LocalPodName, wire.LocalPodIfaceName, wire.LocalNodeIfaceID, wire.PeerIfaceID, linkUID, wire.IsReady)
+// 		if !wire.IsReady {
+// 			wire.PeerIfaceID = peerIntfId
+// 			wire.IsReady = true
+// 			grpcOvrlyLogger.Infof("getOrUpdateWireByUID:[ADD-WIRE]: updated wire  %s@%s-%d@%d, link uid %d, is ready %t",
+// 				wire.LocalPodName, wire.LocalPodIfaceName, wire.LocalNodeIfaceID, wire.PeerIfaceID, linkUID, wire.IsReady)
+// 		}
+// 	}
+// 	return wire, ok
+// }
 
 //-------------------------------------------------------------------------------------------------
 
@@ -443,10 +461,9 @@ func CreateUpdateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct
 	// This can happen due to a race between the local and remote peer.
 	// This can also happen when a pod in one end of the wire is deleted and created again.
 	// In all cases link creation happen only once but it can get updated multiple times.
-	grpcWire, ok := GetWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid))
+	grpcWire, ok := UpdateWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid), wireDef.LinkUid, stopC)
 	if ok {
-		grpcWire.UpdateWire(wireDef.PeerIntfId, stopC)
-		grpcOvrlyLogger.Infof("[ADD-WIRE] At remote end this grpc-wire is already created by %s. Local interface id : %d peer interface id : %d", grpcWire.Originator, grpcWire.LocalNodeIfaceID, grpcWire.PeerIfaceID)
+		grpcOvrlyLogger.Infof("[CREATE-UPDATE-WIRE] At remote end this grpc-wire is already created by %s. Local interface id : %d peer interface id : %d", grpcWire.Originator, grpcWire.LocalNodeIfaceID, grpcWire.PeerIfaceID)
 		return grpcWire, nil
 	}
 
