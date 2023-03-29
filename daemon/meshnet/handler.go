@@ -416,7 +416,7 @@ func (m *Meshnet) AddGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-func (m *Meshnet) DownGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (*mpb.WireDownResponse, error) {
+func (m *Meshnet) GRPCWireDownRemote(ctx context.Context, wireDef *mpb.WireDef) (*mpb.WireDownResponse, error) {
 	err := grpcwire.GRPCWireDownRemoteTriggered(wireDef)
 	if err == nil {
 		log.WithFields(log.Fields{

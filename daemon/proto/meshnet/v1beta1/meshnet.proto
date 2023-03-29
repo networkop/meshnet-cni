@@ -135,7 +135,7 @@ service Local {
 service Remote {
   rpc Update (RemotePod) returns (BoolResponse);
   rpc AddGRPCWireRemote(WireDef) returns (WireCreateResponse);
-  rpc DownGRPCWireRemote(WireDef) returns (WireDownResponse);
+  rpc GRPCWireDownRemote(WireDef) returns (WireDownResponse);
 }
 
 service WireProtocol {

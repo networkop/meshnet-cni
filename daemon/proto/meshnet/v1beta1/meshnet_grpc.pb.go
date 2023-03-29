@@ -404,7 +404,7 @@ var Local_ServiceDesc = grpc.ServiceDesc{
 type RemoteClient interface {
 	Update(ctx context.Context, in *RemotePod, opts ...grpc.CallOption) (*BoolResponse, error)
 	AddGRPCWireRemote(ctx context.Context, in *WireDef, opts ...grpc.CallOption) (*WireCreateResponse, error)
-	DownGRPCWireRemote(ctx context.Context, in *WireDef, opts ...grpc.CallOption) (*WireDownResponse, error)
+	GRPCWireDownRemote(ctx context.Context, in *WireDef, opts ...grpc.CallOption) (*WireDownResponse, error)
 }
 
 type remoteClient struct {
@@ -433,9 +433,9 @@ func (c *remoteClient) AddGRPCWireRemote(ctx context.Context, in *WireDef, opts 
 	return out, nil
 }
 
-func (c *remoteClient) DownGRPCWireRemote(ctx context.Context, in *WireDef, opts ...grpc.CallOption) (*WireDownResponse, error) {
+func (c *remoteClient) GRPCWireDownRemote(ctx context.Context, in *WireDef, opts ...grpc.CallOption) (*WireDownResponse, error) {
 	out := new(WireDownResponse)
-	err := c.cc.Invoke(ctx, "/meshnet.v1beta1.Remote/DownGRPCWireRemote", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/meshnet.v1beta1.Remote/GRPCWireDownRemote", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -448,7 +448,7 @@ func (c *remoteClient) DownGRPCWireRemote(ctx context.Context, in *WireDef, opts
 type RemoteServer interface {
 	Update(context.Context, *RemotePod) (*BoolResponse, error)
 	AddGRPCWireRemote(context.Context, *WireDef) (*WireCreateResponse, error)
-	DownGRPCWireRemote(context.Context, *WireDef) (*WireDownResponse, error)
+	GRPCWireDownRemote(context.Context, *WireDef) (*WireDownResponse, error)
 	mustEmbedUnimplementedRemoteServer()
 }
 
@@ -462,8 +462,8 @@ func (UnimplementedRemoteServer) Update(context.Context, *RemotePod) (*BoolRespo
 func (UnimplementedRemoteServer) AddGRPCWireRemote(context.Context, *WireDef) (*WireCreateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddGRPCWireRemote not implemented")
 }
-func (UnimplementedRemoteServer) DownGRPCWireRemote(context.Context, *WireDef) (*WireDownResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DownGRPCWireRemote not implemented")
+func (UnimplementedRemoteServer) GRPCWireDownRemote(context.Context, *WireDef) (*WireDownResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GRPCWireDownRemote not implemented")
 }
 func (UnimplementedRemoteServer) mustEmbedUnimplementedRemoteServer() {}
 
@@ -514,20 +514,20 @@ func _Remote_AddGRPCWireRemote_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Remote_DownGRPCWireRemote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Remote_GRPCWireDownRemote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(WireDef)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RemoteServer).DownGRPCWireRemote(ctx, in)
+		return srv.(RemoteServer).GRPCWireDownRemote(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/meshnet.v1beta1.Remote/DownGRPCWireRemote",
+		FullMethod: "/meshnet.v1beta1.Remote/GRPCWireDownRemote",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RemoteServer).DownGRPCWireRemote(ctx, req.(*WireDef))
+		return srv.(RemoteServer).GRPCWireDownRemote(ctx, req.(*WireDef))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -548,8 +548,8 @@ var Remote_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Remote_AddGRPCWireRemote_Handler,
 		},
 		{
-			MethodName: "DownGRPCWireRemote",
-			Handler:    _Remote_DownGRPCWireRemote_Handler,
+			MethodName: "GRPCWireDownRemote",
+			Handler:    _Remote_GRPCWireDownRemote_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

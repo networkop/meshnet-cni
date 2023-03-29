@@ -278,7 +278,7 @@ func MakeGRPCChanDown(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, ctx c
 	}
 
 	log.Infof("MakeGRPCChanDown: dialing remote node-->%s@%s", peerPod.Name, url)
-	removeResp, err := remoteClient.DownGRPCWireRemote(ctx, &wireDefRemot)
+	removeResp, err := remoteClient.GRPCWireDownRemote(ctx, &wireDefRemot)
 	if err != nil {
 		return fmt.Errorf("MakeGRPCChanDown: GRPC communication error for : %s, err:%v", url, err)
 	} else if !removeResp.Response {
