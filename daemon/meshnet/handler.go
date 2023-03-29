@@ -295,7 +295,8 @@ func (m *Meshnet) Update(ctx context.Context, pod *mpb.RemotePod) (*mpb.BoolResp
 
 // ------------------------------------------------------------------------------------------------------
 func (m *Meshnet) RemGRPCWire(ctx context.Context, wireDef *mpb.WireDef) (*mpb.BoolResponse, error) {
-	if err := grpcwire.DeleteWiresByPod(wireDef.KubeNs, wireDef.LocalPodName); err != nil {
+	//if err := grpcwire.DeleteWiresByPod(wireDef.KubeNs, wireDef.LocalPodName); err != nil
+	if err := grpcwire.DeletePodWires(wireDef.KubeNs, wireDef.LocalPodName); err != nil {
 		return &mpb.BoolResponse{Response: false}, err
 	}
 	return &mpb.BoolResponse{Response: true}, nil
@@ -361,7 +362,7 @@ func (m *Meshnet) AddGRPCWireLocal(ctx context.Context, wireDef *mpb.WireDef) (*
 		wireDef.LocalPodName, wireDef.IntfNameInPod, wireDef.VethNameLocalHost, wireDef.PeerIntfId)
 
 	// TODO: handle error here
-	go grpcwire.RecvFrmLocalPodThread(&aWire)
+	go grpcwire.RecvFrmLocalPodThread(&aWire, aWire.LocalNodeIfaceName)
 
 	return &mpb.BoolResponse{Response: true}, nil
 }
@@ -403,7 +404,7 @@ func (m *Meshnet) AddGRPCWireRemote(ctx context.Context, wireDef *mpb.WireDef) (
 			"daemon":  "meshnetd",
 			"overlay": "gRPC",
 		}).Infof("[ADD-WIRE:REMOTE-END]For pod %s@%s starting the local packet receive thread", wireDef.LocalPodName, wireDef.IntfNameInPod)
-		go grpcwire.RecvFrmLocalPodThread(wire)
+		go grpcwire.RecvFrmLocalPodThread(wire, wire.LocalNodeIfaceName)
 
 		return &mpb.WireCreateResponse{Response: true, PeerIntfId: wire.LocalNodeIfaceID}, nil
 	}
