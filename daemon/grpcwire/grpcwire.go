@@ -125,19 +125,6 @@ func (w *wireMap) GetWire(namespace string, linkUID int) (*GRPCWire, bool) {
 	return wire, ok
 }
 
-//func (w *wireMap) IsWireReady(namespace string, linkUID int) bool {
-//	w.mu.Lock()
-//	defer w.mu.Unlock()
-//	wire, ok := w.wires[linkKey{
-//		namespace: namespace,
-//		linkUID:   linkUID,
-//	}]
-//	if ok {
-//		return wire.IsReady
-//	}
-//	return false
-//}
-
 func (w *wireMap) GetHandle(key int64) (*pcap.Handle, bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -165,8 +152,6 @@ func (w *wireMap) AtomicDelete(wire *GRPCWire) error {
 		namespace: wire.LocalPodNetNS,
 		linkUID:   wire.UID,
 	})
-
-	// K8sDelGWire(wire)
 
 	delete(w.handles, wire.LocalNodeIfaceID)
 
@@ -269,27 +254,6 @@ func UpdateWireByUID(namespace string, linkUID int, peerIntfId int64, stopC chan
 	return wire, ok
 }
 
-// For the give link UID update the wire structure in the map, set it active and return the updated wire structure.
-// func getOrUpdateWireByUID(namespace string, linkUID int, peerIntfId int64) (*GRPCWire, bool) {
-// 	wires.mu.Lock()
-// 	defer wires.mu.Unlock()
-// 	wire, ok := wires.wires[linkKey{
-// 		namespace: namespace,
-// 		linkUID:   linkUID,
-// 	}]
-// 	if ok {
-// 		grpcOvrlyLogger.Infof("getOrUpdateWireByUID:[ADD-WIRE]: wire found %s@%s-%d@%d, link uid %d, is ready %t",
-// 			wire.LocalPodName, wire.LocalPodIfaceName, wire.LocalNodeIfaceID, wire.PeerIfaceID, linkUID, wire.IsReady)
-// 		if !wire.IsReady {
-// 			wire.PeerIfaceID = peerIntfId
-// 			wire.IsReady = true
-// 			grpcOvrlyLogger.Infof("getOrUpdateWireByUID:[ADD-WIRE]: updated wire  %s@%s-%d@%d, link uid %d, is ready %t",
-// 				wire.LocalPodName, wire.LocalPodIfaceName, wire.LocalNodeIfaceID, wire.PeerIfaceID, linkUID, wire.IsReady)
-// 		}
-// 	}
-// 	return wire, ok
-// }
-
 //-------------------------------------------------------------------------------------------------
 
 // WireDownByUID - stops packet collection form the connected pod
@@ -315,45 +279,6 @@ func WireDownByUID(namespace string, linkUID int) error {
 	return nil
 }
 
-// DelWireByUID returns wire matching the provided namespace and linkUID.
-// tbd: not used
-//func DelWireByUID(namespace string, linkUID int) error {
-//	//return wires.GetWire(namespace, linkUID)
-//	wires.mu.Lock()
-//	defer wires.mu.Unlock()
-//
-//	wire, ok := wires.wires[linkKey{
-//		namespace: namespace,
-//		linkUID:   linkUID,
-//	}]
-//	if ok {
-//		close(wire.StopC)
-//		delete(wires.handles, wire.LocalNodeIfaceID)
-//
-//		intf, err := net.InterfaceByIndex(int(wire.LocalNodeIfaceID))
-//		if err != nil {
-//			grpcOvrlyLogger.Errorf("ERROR: [WIRE-DELETE]DelWireByUID:Interface index %d for wire %d, is already cleaned up, err %v.", wire.LocalNodeIfaceID, wire.UID, err)
-//		} else {
-//			myVeth := koko.VEth{}
-//			myVeth.LinkName = intf.Name
-//			if err = myVeth.RemoveVethLink(); err != nil {
-//				grpcOvrlyLogger.Errorf("ERROR: [WIRE-DELETE]DelWireByUID:failed to remove veth link: %v", err)
-//			}
-//		}
-//		grpcOvrlyLogger.Infof("DelWireByUID:[WIRE-DELETE]: Removing wire info from db, %s@%s-%s@%d, peer fid %d",
-//			wire.LocalPodName, wire.LocalPodIfaceName, wire.LocalNodeIfaceName, wire.LocalNodeIfaceID, wire.PeerIfaceID)
-//
-//		delete(wires.wires, linkKey{
-//			namespace: namespace,
-//			linkUID:   linkUID,
-//		})
-//	} else {
-//		grpcOvrlyLogger.Infof("DelWireByUID:[WIRE-DELETE]: Did not find entry to remove from db, uid %d, ns %s",
-//			linkUID, namespace)
-//	}
-//	return nil
-//}
-
 // -------------------------------------------------------------------------------------------------
 // Add a wire in the in memory wire map
 func AddWire(wire *GRPCWire, handle *pcap.Handle) int {
@@ -374,29 +299,6 @@ func DeleteWire(wire *GRPCWire) int {
 	wires.AtomicDelete(wire)
 	return len(wires.wires)
 }
-
-//-----------------------------------------------------------------------------------------------------------
-//func DeleteWiresByPod2(namespace string, podName string) error {
-//	wires, ok := GetWiresByPod(namespace, podName)
-//	if !ok || len(wires) == 0 {
-//		grpcOvrlyLogger.Infof("[WIRE-DELETE]:All grpc-wires for pod %s:%s is already deleted", namespace, podName)
-//		return nil
-//	}
-//	grpcOvrlyLogger.Infof("[WIRE-DELETE]:Removing %d grpc-wires for pod %s@%s", len(wires), podName, namespace)
-//	var errs errlist.List
-//	for _, w := range wires {
-//		grpcOvrlyLogger.Infof("ERROR: [WIRE-DELETE]:Removing local-iface@pod : %s@%s for wire UID: %d", w.LocalPodIfaceName, w.LocalPodName, w.UID)
-//		if err := RemoveWire(w); err != nil {
-//			grpcOvrlyLogger.Infof("ERROR: [WIRE-DELETE]:Error Removing local-iface@pod : %s@%s for wire UID: %d : %v", w.LocalPodIfaceName, w.LocalPodName, w.UID, err)
-//			errs.Add(err)
-//		}
-//	}
-//	if errs.Err() != nil {
-//		return fmt.Errorf("ERROR: [WIRE-DELETE]:failed to remove all grpc-wires for pod %s@%s: %w", podName, namespace, errs.Err())
-//	}
-//	grpcOvrlyLogger.Infof("[WIRE-DELETE]:Successfully removed all grpc-wires for pod %s@%s", podName, namespace)
-//	return nil
-//}
 
 // This function is used for delete operation. It deletes all the wires connected with the pod.
 // This function clear up the in-memory data base as well as the K8S Datastore.
@@ -422,34 +324,6 @@ func DeletePodWires(namespace string, podName string) error {
 	grpcOvrlyLogger.Infof("[WIRE-DELETE]:All grpc-wires for pod %s:%s is deleted", namespace, podName)
 	return nil
 }
-
-// func DeleteWiresByPod(namespace string, podName string) error {
-// 	wires.mu.Lock()
-// 	defer wires.mu.Unlock()
-
-// 	for _, wire := range wires.wires {
-// 		if wire.LocalPodName == podName && wire.Namespace == namespace {
-// 			close(wire.StopC)
-
-// 			/* Remove the veth from the node */
-// 			intf, err := net.InterfaceByIndex(int(wire.LocalNodeIfaceID))
-// 			if err != nil {
-// 				grpcOvrlyLogger.Errorf("[WIRE-DELETE]:Interface index %d for wire %d, is already cleaned up.", wire.LocalNodeIfaceID, wire.UID)
-// 			} else {
-// 				myVeth := koko.VEth{}
-// 				myVeth.LinkName = intf.Name
-// 				if err = myVeth.RemoveVethLink(); err != nil {
-// 					grpcOvrlyLogger.Errorf("[WIRE-DELETE]:failed to remove veth link: %w", err)
-// 				}
-// 			}
-// 			grpcOvrlyLogger.Infof("DeleteWiresByPod:[WIRE-DELETE]: Removing wire info from db, %s@%s-%s@%d, peer fid %d",
-// 				wire.LocalPodName, wire.LocalPodIfaceName, wire.LocalNodeIfaceName, wire.LocalNodeIfaceID, wire.PeerIfaceID)
-
-// 			wires.DeleteWoLock(wire)
-// 		}
-// 	}
-// 	return nil
-//}
 
 // ----------------------------------------------------------------------------------------------------------
 func RemoveWire(wire *GRPCWire) error {
@@ -510,11 +384,10 @@ func RemoveWireAcrosAll(wire *GRPCWire, inMem bool) error {
 	}
 
 	// clean up im-memory wire-map
-	if inMem == true {
+	if inMem {
 		wires.AtomicDelete(wire) // Deleting the wire from in-memory data
 	}
-	//delete from data-store (+++tbd: this will be added in future)
-	//K8sDelGWire(wire)
+
 	grpcOvrlyLogger.Infof("[WIRE-DELETE]:Successfully removed grpc wire for link %d, iface id %d.", wire.UID, wire.LocalNodeIfaceID)
 	return nil
 }
@@ -569,19 +442,6 @@ func CreateUpdateGRPCWireRemoteTriggered(wireDef *mpb.WireDef, stopC chan struct
 		grpcOvrlyLogger.Infof("[CREATE-UPDATE-WIRE] At remote end this grpc-wire is already created by %s. Local interface id : %d peer interface id : %d", grpcWire.Originator, grpcWire.LocalNodeIfaceID, grpcWire.PeerIfaceID)
 		return grpcWire, nil
 	}
-
-	// grpcWire, ok := getOrUpdateWireByUID(wireDef.LocalPodNetNs, int(wireDef.LinkUid), wireDef.PeerIntfId)
-	// if ok {
-	// 	grpcWire.StopC = stopC
-	// 	if grpcWire.IsReady {
-	// 		grpcOvrlyLogger.Infof("[ADD-WIRE:REMOTE-END] This grpc-wire is already created by %s. Local interface id : %d peer interface id : %d", grpcWire.Originator, grpcWire.LocalNodeIfaceID, grpcWire.PeerIfaceID)
-	// 		return grpcWire, nil
-	// 	} else {
-	// 		grpcOvrlyLogger.Infof("[ADD-WIRE:REMOTE-END] Making up this grpc-wire created by %s. Local interface id : %d peer interface id : %d",
-	// 			grpcWire.Originator, grpcWire.LocalNodeIfaceID, grpcWire.PeerIfaceID)
-	// 		return grpcWire, nil
-	// 	}
-	// }
 
 	outIfNm, err := GenNodeIfaceName(wireDef.LocalPodName, wireDef.IntfNameInPod)
 	if err != nil {
@@ -705,7 +565,6 @@ func RecvFrmLocalPodThread(wire *GRPCWire, locIfNm string) error {
 	// in some rare cases by the time the thread starts K8S may decide to move the pod somewhere else.
 	// in that case the local interfaced will be cleaned up asynchronously. Detect the situation and return.
 	_, err := net.InterfaceByName(locIfNm)
-	//_, err := net.InterfaceByName(wire.LocalNodeIfaceName)
 	if err != nil {
 		grpcOvrlyLogger.Errorf("[Packet Receive thread]For pod %s failed to retrieve interface %s/%d. error: %v", wire.LocalPodName, wire.LocalNodeIfaceName, wire.LocalNodeIfaceID, err)
 		return err
