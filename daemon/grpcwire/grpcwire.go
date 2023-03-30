@@ -310,7 +310,7 @@ func DeletePodWires(namespace string, podName string) error {
 			break
 		}
 
-		// Since this wire is already extracted, so it no more preset in in-memory-map. Next we need to clear only the K8S data store.
+		// Since this wire is already extracted, so it no more preset in in-memory-map. Next we need to clear only the K8S data store (TBD).
 		if err := RemoveWireAcrosAll(aW, false); err != nil {
 			grpcOvrlyLogger.Infof("[WIRE-DELETE]:Error Removing local-iface@pod : %s@%s for wire UID: %d, iface id %d : %v", aW.LocalPodIfaceName, aW.LocalPodName, aW.UID, aW.LocalNodeIfaceID, err)
 			errs.Add(err)
