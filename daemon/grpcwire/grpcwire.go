@@ -111,8 +111,8 @@ func (wire *GRPCWire) UpdateWire(peerIntfId int64, stopC chan struct{}) {
 	wire.StopC = stopC
 	if !wire.IsReady {
 		wire.PeerIfaceID = peerIntfId
-		wire.IsReady = true
 	}
+	wire.IsReady = true
 }
 
 func (w *wireMap) GetWire(namespace string, linkUID int) (*GRPCWire, bool) {
@@ -248,8 +248,8 @@ func UpdateWireByUID(namespace string, linkUID int, peerIntfId int64, stopC chan
 		wire.StopC = stopC
 		if !wire.IsReady {
 			wire.PeerIfaceID = peerIntfId
-			wire.IsReady = true
 		}
+		wire.IsReady = true
 	}
 	return wire, ok
 }
@@ -325,36 +325,6 @@ func DeletePodWires(namespace string, podName string) error {
 	return nil
 }
 
-// ----------------------------------------------------------------------------------------------------------
-//func RemoveWire(wire *GRPCWire) error {
-//
-//	if wire == nil {
-//		grpcOvrlyLogger.Infof("[WIRE-DELETE]:Null wire. This ware is already removed")
-//		return nil
-//	}
-//
-//	/* stop the packet receive thread for this pod */
-//	grpcOvrlyLogger.Infof("[RemoveWire]: closing connection, %s%s", wire.LocalPodName, wire.LocalPodIfaceName)
-//	close(wire.StopC)
-//
-//	/* Remove the veth from the node */
-//	intf, err := net.InterfaceByIndex(int(wire.LocalNodeIfaceID))
-//	if err != nil {
-//		grpcOvrlyLogger.Infof("[WIRE-DELETE]:Interface index %d for wire %d, is already cleaned up.", wire.LocalNodeIfaceID, wire.UID)
-//	} else {
-//		myVeth := koko.VEth{}
-//		myVeth.LinkName = intf.Name
-//		if err = myVeth.RemoveVethLink(); err != nil {
-//			return fmt.Errorf("[WIRE-DELETE]:failed to remove veth link: %w", err)
-//		}
-//	}
-//
-//	DeleteWire(wire)
-//	grpcOvrlyLogger.Infof("[WIRE-DELETE]:Successfully removed grpc wire for link %d.", wire.UID)
-//
-//	return nil
-//}
-
 // -----------------------------------------------------------------------------------------------------------
 
 // Cleanup function for clearing up the in-memory wire map and the K8S data store, when the meshnet cni plugin
@@ -369,7 +339,10 @@ func RemoveWireAcrosAll(wire *GRPCWire, inMem bool) error {
 	}
 
 	// stop the packet receive thread for this pod
-	close(wire.StopC)
+	if wire.IsReady {
+		close(wire.StopC)
+	}
+	wire.IsReady = false
 
 	/* Remove the veth from the node */
 	intf, err := net.InterfaceByIndex(int(wire.LocalNodeIfaceID))

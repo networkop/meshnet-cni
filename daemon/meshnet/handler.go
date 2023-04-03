@@ -123,22 +123,6 @@ func (m *Meshnet) Skip(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolRespo
 		}
 
 		skipped, _, _ := unstructured.NestedSlice(result.Object, "status", "skipped")
-		// // If the pod is already present in skipped list we don't need to append it again
-		// var found bool = false
-		// for _, el := range skipped {
-		// 	elString, ok := el.(string)
-		// 	if ok {
-		// 		if elString == skip.Peer {
-		// 			found = true
-		// 			break
-		// 		}
-		// 	}
-		// }
-
-		// newSkipped := skipped
-		// if found == false {
-		// 	newSkipped = append(newSkipped, skip.Peer)
-		// }
 
 		newSkipped := append(skipped, skip.Peer)
 
@@ -165,15 +149,21 @@ func (m *Meshnet) Skip(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolRespo
 // Anytime a pod is destroyed, for a link, it inserts itself in the skip list of its' peers on the link.
 // It removes the peer from its won skip list for this meshnet link
 func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolResponse, error) {
-	mnetdLogger.Infof("Reverse-skipping of pod %s by pod %s", skip.Peer, skip.Pod)
+	mnetdLogger.Infof("Reverse-skipping of peer pod %s by local pod %s", skip.Peer, skip.Pod)
 
 	var podName string
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		// setting the value for peer pod
+		// setting the value for peer pod if peer pod is alive
 		peerPod, err := m.getPod(ctx, skip.Peer, skip.KubeNs)
 		if err != nil {
 			mnetdLogger.Errorf("Failed to read pod %s from K8s", skip.Pod)
 			return err
+		}
+		srcIP, _, _ := unstructured.NestedString(peerPod.Object, "status", "src_ip")
+		netNs, _, _ := unstructured.NestedString(peerPod.Object, "status", "net_ns")
+		if srcIP == "" || netNs == "" {
+			// peer pod is not alive as container. so no need to update peer's skipped list in Topology CRD.
+			return nil
 		}
 		podName = peerPod.GetName()
 
@@ -199,7 +189,7 @@ func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.Bo
 			}
 		}
 		newPeerSkipped := peerSkipped
-		if found == false {
+		if !found {
 			newPeerSkipped = append(newPeerSkipped, skip.Pod)
 		}
 
@@ -236,8 +226,8 @@ func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.Bo
 
 		log.WithFields(log.Fields{
 			"daemon":      "meshnetd",
-			"thisSkipped": thisSkipped,
-		}).Info("THIS SKIPPED:")
+			"SkipReverse": thisSkipped,
+		}).Info("THIS SkipReverse:")
 
 		for _, el := range thisSkipped {
 			elString, ok := el.(string)
@@ -250,21 +240,19 @@ func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.Bo
 		}
 
 		log.WithFields(log.Fields{
-			"daemon":         "meshnetd",
-			"newThisSkipped": newThisSkipped,
-		}).Info("NEW THIS SKIPPED:")
+			"daemon":      "meshnetd",
+			"SkipReverse": newThisSkipped,
+		}).Info("NEW THIS SkipReverse:")
 
 		// updating this pod's skipped list locally after removing the peer from the current skip list.
-		if len(newThisSkipped) != 0 {
-			if err := unstructured.SetNestedField(thisPod.Object, newThisSkipped, "status", "skipped"); err != nil {
-				mnetdLogger.Errorf("Failed to cleanup skipped list for pod %s", thisPod.GetName())
-				return err
-			}
-
-			// sending this pod's updates to k8s
-			return m.updateStatus(ctx, thisPod, skip.KubeNs)
+		// Length check for newThisSkipped is not needed even if it is empty. we should update data-store with empty list.
+		if err := unstructured.SetNestedField(thisPod.Object, newThisSkipped, "status", "skipped"); err != nil {
+			mnetdLogger.Errorf("Failed to cleanup skipped list for pod %s", thisPod.GetName())
+			return err
 		}
-		return nil
+
+		// sending this pod's updates to k8s
+		return m.updateStatus(ctx, thisPod, skip.KubeNs)
 	})
 	if retryErr != nil {
 		log.WithFields(log.Fields{
