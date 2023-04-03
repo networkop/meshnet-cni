@@ -304,7 +304,7 @@ func DeleteWire(wire *GRPCWire) int {
 // This function clear up the in-memory data base as well as the K8S Datastore.
 func DeletePodWires(namespace string, podName string) error {
 	var errs errlist.List
-	for true {
+	for {
 		aW, _ := ExtractOneWireByPod(namespace, podName)
 		if aW == nil {
 			break
@@ -326,34 +326,34 @@ func DeletePodWires(namespace string, podName string) error {
 }
 
 // ----------------------------------------------------------------------------------------------------------
-func RemoveWire(wire *GRPCWire) error {
-
-	if wire == nil {
-		grpcOvrlyLogger.Infof("[WIRE-DELETE]:Null wire. This ware is already removed")
-		return nil
-	}
-
-	/* stop the packet receive thread for this pod */
-	grpcOvrlyLogger.Infof("[RemoveWire]: closing connection, %s%s", wire.LocalPodName, wire.LocalPodIfaceName)
-	close(wire.StopC)
-
-	/* Remove the veth from the node */
-	intf, err := net.InterfaceByIndex(int(wire.LocalNodeIfaceID))
-	if err != nil {
-		grpcOvrlyLogger.Infof("[WIRE-DELETE]:Interface index %d for wire %d, is already cleaned up.", wire.LocalNodeIfaceID, wire.UID)
-	} else {
-		myVeth := koko.VEth{}
-		myVeth.LinkName = intf.Name
-		if err = myVeth.RemoveVethLink(); err != nil {
-			return fmt.Errorf("[WIRE-DELETE]:failed to remove veth link: %w", err)
-		}
-	}
-
-	DeleteWire(wire)
-	grpcOvrlyLogger.Infof("[WIRE-DELETE]:Successfully removed grpc wire for link %d.", wire.UID)
-
-	return nil
-}
+//func RemoveWire(wire *GRPCWire) error {
+//
+//	if wire == nil {
+//		grpcOvrlyLogger.Infof("[WIRE-DELETE]:Null wire. This ware is already removed")
+//		return nil
+//	}
+//
+//	/* stop the packet receive thread for this pod */
+//	grpcOvrlyLogger.Infof("[RemoveWire]: closing connection, %s%s", wire.LocalPodName, wire.LocalPodIfaceName)
+//	close(wire.StopC)
+//
+//	/* Remove the veth from the node */
+//	intf, err := net.InterfaceByIndex(int(wire.LocalNodeIfaceID))
+//	if err != nil {
+//		grpcOvrlyLogger.Infof("[WIRE-DELETE]:Interface index %d for wire %d, is already cleaned up.", wire.LocalNodeIfaceID, wire.UID)
+//	} else {
+//		myVeth := koko.VEth{}
+//		myVeth.LinkName = intf.Name
+//		if err = myVeth.RemoveVethLink(); err != nil {
+//			return fmt.Errorf("[WIRE-DELETE]:failed to remove veth link: %w", err)
+//		}
+//	}
+//
+//	DeleteWire(wire)
+//	grpcOvrlyLogger.Infof("[WIRE-DELETE]:Successfully removed grpc wire for link %d.", wire.UID)
+//
+//	return nil
+//}
 
 // -----------------------------------------------------------------------------------------------------------
 
