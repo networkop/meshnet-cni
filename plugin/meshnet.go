@@ -84,32 +84,37 @@ func loadConf(bytes []byte) (*netConf, *current.Result, error) {
 }
 
 // getVxlanSource uses netlink to get the iface reliably given an IP address.
-func getVxlanSource(nodeIP string) (string, string, error) {
-	if nodeIP == "" {
-		return "", "", fmt.Errorf("meshnetd provided no HOST_IP address: %s", nodeIP)
-	}
-	nIP := net.ParseIP(nodeIP)
-	if nIP == nil {
-		return "", "", fmt.Errorf("parsing failed for meshnetd provided no HOST_IP address: %s", nodeIP)
-	}
-	ifaces, _ := net.Interfaces()
-	for _, i := range ifaces {
-		addrs, _ := i.Addrs()
-		for _, a := range addrs {
-			var ip net.IP
-			switch v := a.(type) {
-			case *net.IPNet:
-				ip = v.IP
-			case *net.IPAddr:
-				ip = v.IP
-			}
-			if nIP.Equal(ip) {
-				log.Infof("Found iface %s for address %s", i.Name, nodeIP)
-				return nodeIP, i.Name, nil
-			}
-		}
-	}
-	return "", "", fmt.Errorf("no iface found for address %s", nodeIP)
+func getVxlanSource(nodeIP string, nodeIntf string) (string, string, error) {
+    if nodeIntf == "" && nodeIP == "" {
+        return "", "", fmt.Errorf("meshnetd provided no HOST_IP address: %s or HOST_INTF: %s", nodeIP, nodeIntf)
+    }
+    nIP := net.ParseIP(nodeIP)
+    if nIP == nil && nodeIntf == "" {
+        return "", "", fmt.Errorf("parsing failed for meshnetd provided no HOST_IP address: %s and node HOST_INTF: %s", nodeIP, nodeIntf)
+    }
+    ifaces, _ := net.Interfaces()
+    for _, i := range ifaces {
+        addrs, _ := i.Addrs()
+        for _, a := range addrs {
+            var ip net.IP
+            switch v := a.(type) {
+            case *net.IPNet:
+                ip = v.IP
+            case *net.IPAddr:
+                ip = v.IP
+            }
+            if nodeIntf != "" {
+               if i.Name == nodeIntf {
+                   return ip.String(), nodeIntf, nil
+               }
+            }
+            if nIP != nil && nIP.Equal(ip) {
+                log.Infof("Found iface %s for address %s", i.Name, nodeIP)
+                return nodeIP, i.Name, nil
+            }
+        }
+    }
+    return "", "", fmt.Errorf("no iface found for address %s", nodeIP)
 }
 
 // -------------------------------------------------------------------------------------------------

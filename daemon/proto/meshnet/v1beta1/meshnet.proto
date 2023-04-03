@@ -12,6 +12,7 @@ message Pod {
   string kube_ns = 4;
   repeated Link links = 5;
   string node_ip = 6;
+  string node_intf = 7;
 }
 
 message Link {

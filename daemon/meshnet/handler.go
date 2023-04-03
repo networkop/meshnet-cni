@@ -64,6 +64,7 @@ func (m *Meshnet) Get(ctx context.Context, pod *mpb.PodQuery) (*mpb.Pod, error) 
 	srcIP, _, _ := unstructured.NestedString(result.Object, "status", "src_ip")
 	netNs, _, _ := unstructured.NestedString(result.Object, "status", "net_ns")
 	nodeIP := os.Getenv("HOST_IP")
+	nodeIntf := os.Getenv("HOST_INTF")
 
 	return &mpb.Pod{
 		Name:   pod.Name,
@@ -72,6 +73,7 @@ func (m *Meshnet) Get(ctx context.Context, pod *mpb.PodQuery) (*mpb.Pod, error) 
 		KubeNs: pod.KubeNs,
 		Links:  links,
 		NodeIp: nodeIP,
+		NodeIntf: nodeIntf,
 	}, nil
 }
 
