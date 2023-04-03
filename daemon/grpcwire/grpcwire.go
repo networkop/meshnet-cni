@@ -111,8 +111,8 @@ func (wire *GRPCWire) UpdateWire(peerIntfId int64, stopC chan struct{}) {
 	wire.StopC = stopC
 	if !wire.IsReady {
 		wire.PeerIfaceID = peerIntfId
-		wire.IsReady = true
 	}
+	wire.IsReady = true
 }
 
 func (w *wireMap) GetWire(namespace string, linkUID int) (*GRPCWire, bool) {
@@ -248,8 +248,8 @@ func UpdateWireByUID(namespace string, linkUID int, peerIntfId int64, stopC chan
 		wire.StopC = stopC
 		if !wire.IsReady {
 			wire.PeerIfaceID = peerIntfId
-			wire.IsReady = true
 		}
+		wire.IsReady = true
 	}
 	return wire, ok
 }
@@ -336,6 +336,7 @@ func RemoveWire(wire *GRPCWire) error {
 	/* stop the packet receive thread for this pod */
 	grpcOvrlyLogger.Infof("[RemoveWire]: closing connection, %s%s", wire.LocalPodName, wire.LocalPodIfaceName)
 	close(wire.StopC)
+	wire.IsReady = false
 
 	/* Remove the veth from the node */
 	intf, err := net.InterfaceByIndex(int(wire.LocalNodeIfaceID))
@@ -369,7 +370,10 @@ func RemoveWireAcrosAll(wire *GRPCWire, inMem bool) error {
 	}
 
 	// stop the packet receive thread for this pod
-	close(wire.StopC)
+	if wire.IsReady == true {
+		close(wire.StopC)
+	}
+	wire.IsReady = false
 
 	/* Remove the veth from the node */
 	intf, err := net.InterfaceByIndex(int(wire.LocalNodeIfaceID))
