@@ -193,7 +193,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	// Finding the source IP and interface for VXLAN VTEP
-	srcIP, srcIntf, err := getVxlanSource(localPod.NodeIp)
+	srcIP, srcIntf, err := getVxlanSource(localPod.NodeIp, localPod.NodeIntf)
 	if err != nil {
 		return err
 	}
