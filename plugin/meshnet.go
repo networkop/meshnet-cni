@@ -84,6 +84,12 @@ func loadConf(bytes []byte) (*netConf, *current.Result, error) {
 }
 
 // getVxlanSource uses netlink to get the iface reliably given an IP address.
+// when IP and Interface both are present then Interface is going to take preference
+// nodeIntf is specified by the user and it's not auto discovered. The user has to be careful that the peer is reachable though this interface otherwise, VxLAN may not work.
+// daemonset.yaml meshnet container env required for host_intf override
+//          env:
+//            - name: HOST_INTF
+//   			value: breth2
 func getVxlanSource(nodeIP string, nodeIntf string) (string, string, error) {
     if nodeIntf == "" && nodeIP == "" {
         return "", "", fmt.Errorf("meshnetd provided no HOST_IP address: %s or HOST_INTF: %s", nodeIP, nodeIntf)
