@@ -94,6 +94,10 @@ message WireCreateResponse {
   int64 peer_intf_id = 2;
 }
 
+message WireDownResponse {
+  bool response = 1;
+}
+
 message Packet {
   // the remote machine interface id, to which this packet should be delivered. 
   int64 remot_intf_id = 1;   
@@ -131,6 +135,7 @@ service Local {
 service Remote {
   rpc Update (RemotePod) returns (BoolResponse);
   rpc AddGRPCWireRemote(WireDef) returns (WireCreateResponse);
+  rpc GRPCWireDownRemote(WireDef) returns (WireDownResponse);
 }
 
 service WireProtocol {
