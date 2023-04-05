@@ -360,6 +360,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 					PeerVtep: localPod.SrcIp,
 					Vni:      link.Uid + vxlanBase,
 					KubeNs:   string(cniArgs.K8S_POD_NAMESPACE),
+					NodeIntf: srcIntf,
 				}
 
 				url := fmt.Sprintf("%s:%s", peerPod.SrcIp, defaultPort)

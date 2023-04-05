@@ -46,6 +46,7 @@ message RemotePod {
   string peer_vtep = 4;
   string kube_ns = 5;
   int64 vni = 6;
+  string node_intf = 7;
 }
 
 // The proto describes both end of a grpc-wire, the local end and the remote

@@ -371,6 +371,7 @@ type RemotePod struct {
 	PeerVtep string `protobuf:"bytes,4,opt,name=peer_vtep,json=peerVtep,proto3" json:"peer_vtep,omitempty"`
 	KubeNs   string `protobuf:"bytes,5,opt,name=kube_ns,json=kubeNs,proto3" json:"kube_ns,omitempty"`
 	Vni      int64  `protobuf:"varint,6,opt,name=vni,proto3" json:"vni,omitempty"`
+	NodeIntf string `protobuf:"bytes,2,opt,name=node_intf,json=NodeIntf,proto3" json:"node_intf,omitempty"`
 }
 
 func (x *RemotePod) Reset() {
