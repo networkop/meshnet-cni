@@ -108,10 +108,10 @@ func (m *Meshnet) SetAlive(ctx context.Context, pod *mpb.Pod) (*mpb.BoolResponse
 	return &mpb.BoolResponse{Response: true}, nil
 }
 
-// When a pod does nto find its peer to establish a link then it marks the peer as skipped.
+// When a pod does not find its peer to establish a link then it marks the peer as skipped.
 // The pod stores the list of skipped peers in it's skip list.
-// For example - when a high priority pod do not find it's peer to create the link then
-// the high priority pod adds the low priority pod in its skip list.
+// For example - when a pod want to initiate link creation and it do not find it's peer
+// then initiating pod adds the low priority pod in its skip list.
 func (m *Meshnet) Skip(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolResponse, error) {
 	mnetdLogger.Infof("Skipping of pod %s by pod %s", skip.Peer, skip.Pod)
 
