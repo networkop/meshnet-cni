@@ -147,7 +147,7 @@ func (m *Meshnet) Skip(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolRespo
 
 // This clean up function is called when a pod is getting deleted and it get called once for every link the pod has.
 // Anytime a pod is destroyed, for a link, it inserts itself in the skip list of its' peers on the link.
-// It removes the peer from its won skip list for this meshnet link
+// It removes the peer from its own skip list for this meshnet link
 func (m *Meshnet) SkipReverse(ctx context.Context, skip *mpb.SkipQuery) (*mpb.BoolResponse, error) {
 	mnetdLogger.Infof("Reverse-skipping of peer pod %s by local pod %s", skip.Peer, skip.Pod)
 
