@@ -89,7 +89,7 @@ func loadConf(bytes []byte) (*netConf, *current.Result, error) {
 // daemonset.yaml meshnet container env required for host_intf override
 //          env:
 //            - name: HOST_INTF
-//   			value: breth2
+//   		value: breth2
 func getVxlanSource(nodeIP string, nodeIntf string) (string, string, error) {
     if nodeIntf == "" && nodeIP == "" {
         return "", "", fmt.Errorf("meshnetd provided no HOST_IP address: %s or HOST_INTF: %s", nodeIP, nodeIntf)
