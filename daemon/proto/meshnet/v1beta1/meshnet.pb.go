@@ -31,7 +31,7 @@ type Pod struct {
 	KubeNs string  `protobuf:"bytes,4,opt,name=kube_ns,json=kubeNs,proto3" json:"kube_ns,omitempty"`
 	Links  []*Link `protobuf:"bytes,5,rep,name=links,proto3" json:"links,omitempty"`
 	NodeIp string  `protobuf:"bytes,6,opt,name=node_ip,json=nodeIp,proto3" json:"node_ip,omitempty"`
-	NodeIntf string  `protobuf:"bytes,6,opt,name=node_intf,json=nodeIntf,proto3" json:"node_intf,omitempty"`
+	NodeIntf string  `protobuf:"bytes,7,opt,name=node_intf,json=nodeIntf,proto3" json:"node_intf,omitempty"`
 }
 
 func (x *Pod) Reset() {
