@@ -24,9 +24,10 @@ type TopologySpec struct {
 }
 
 type TopologyStatus struct {
-	Skipped []string `json:"skipped"`
-	SrcIP   string   `json:"src_ip"`
-	NetNS   string   `json:"net_ns"`
+	Skipped     []string `json:"skipped"`
+	SrcIP       string   `json:"src_ip"`
+	NetNS       string   `json:"net_ns"`
+	ContainerID string   `json:"container_id"`
 }
 
 type Link struct {
