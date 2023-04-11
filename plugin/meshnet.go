@@ -431,7 +431,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	log.Infof("Del: Retrieving pod's (%s@%s) metadata from meshnet daemon", string(cniArgs.K8S_POD_NAME), string(cniArgs.K8S_POD_NAMESPACE))
 	localPod, err := meshnetClient.Get(ctx, &mpb.PodQuery{
-		Name:   string(cniArgs.K8S_POD_NAME), // getting deatils of the curretn pod.
+		Name:   string(cniArgs.K8S_POD_NAME), // getting deatils of the current pod.
 		KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
 	})
 	if err != nil {
