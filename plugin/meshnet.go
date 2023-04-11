@@ -445,7 +445,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	/* Tell daemon to close the grpc tunnel for this pod netns (if any) */
-	log.Infof("Del: Retrieving pod's metadata from meshnet daemon")
+	log.Infof("Del: Remove the pod's grpc tunnel, if any")
 	wireDef := mpb.WireDef{
 		KubeNs:       string(cniArgs.K8S_POD_NAMESPACE),
 		LocalPodName: string(cniArgs.K8S_POD_NAME),
