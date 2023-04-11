@@ -98,7 +98,7 @@ func (m *Meshnet) SetAlive(ctx context.Context, pod *mpb.Pod) (*mpb.BoolResponse
 		}
 
 		if err = unstructured.SetNestedField(result.Object, pod.ContainerId, "status", "container_id"); err != nil {
-			mnetdLogger.Errorf("Failed to update pod's net_ns")
+			mnetdLogger.Errorf("Failed to update pod's container_id")
 		}
 
 		return m.updateStatus(ctx, result, pod.KubeNs)
