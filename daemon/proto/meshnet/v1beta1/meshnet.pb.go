@@ -650,6 +650,53 @@ func (x *WireCreateResponse) GetPeerIntfId() int64 {
 	return 0
 }
 
+type WireDownResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Response bool `protobuf:"varint,1,opt,name=response,proto3" json:"response,omitempty"`
+}
+
+func (x *WireDownResponse) Reset() {
+	*x = WireDownResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_meshnet_proto_msgTypes[8]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *WireDownResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WireDownResponse) ProtoMessage() {}
+
+func (x *WireDownResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_meshnet_proto_msgTypes[8]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WireDownResponse.ProtoReflect.Descriptor instead.
+func (*WireDownResponse) Descriptor() ([]byte, []int) {
+	return file_meshnet_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *WireDownResponse) GetResponse() bool {
+	if x != nil {
+		return x.Response
+	}
+	return false
+}
+
 type Packet struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -1001,9 +1048,10 @@ var file_meshnet_proto_goTypes = []interface{}{
 	(*RemotePod)(nil),                         // 5: meshnet.v1beta1.RemotePod
 	(*WireDef)(nil),                           // 6: meshnet.v1beta1.WireDef
 	(*WireCreateResponse)(nil),                // 7: meshnet.v1beta1.WireCreateResponse
-	(*Packet)(nil),                            // 8: meshnet.v1beta1.Packet
-	(*GenerateNodeInterfaceNameRequest)(nil),  // 9: meshnet.v1beta1.GenerateNodeInterfaceNameRequest
-	(*GenerateNodeInterfaceNameResponse)(nil), // 10: meshnet.v1beta1.GenerateNodeInterfaceNameResponse
+	(*WireDownResponse)(nil),                  // 8: meshnet.v1beta1.WireDownResponse
+	(*Packet)(nil),                            // 9: meshnet.v1beta1.Packet
+	(*GenerateNodeInterfaceNameRequest)(nil),  // 10: meshnet.v1beta1.GenerateNodeInterfaceNameRequest
+	(*GenerateNodeInterfaceNameResponse)(nil), // 11: meshnet.v1beta1.GenerateNodeInterfaceNameResponse
 }
 var file_meshnet_proto_depIdxs = []int32{
 	1,  // 0: meshnet.v1beta1.Pod.links:type_name -> meshnet.v1beta1.Link
@@ -1015,26 +1063,28 @@ var file_meshnet_proto_depIdxs = []int32{
 	6,  // 6: meshnet.v1beta1.Local.GRPCWireExists:input_type -> meshnet.v1beta1.WireDef
 	6,  // 7: meshnet.v1beta1.Local.AddGRPCWireLocal:input_type -> meshnet.v1beta1.WireDef
 	6,  // 8: meshnet.v1beta1.Local.RemGRPCWire:input_type -> meshnet.v1beta1.WireDef
-	9,  // 9: meshnet.v1beta1.Local.GenerateNodeInterfaceName:input_type -> meshnet.v1beta1.GenerateNodeInterfaceNameRequest
+	10, // 9: meshnet.v1beta1.Local.GenerateNodeInterfaceName:input_type -> meshnet.v1beta1.GenerateNodeInterfaceNameRequest
 	5,  // 10: meshnet.v1beta1.Remote.Update:input_type -> meshnet.v1beta1.RemotePod
 	6,  // 11: meshnet.v1beta1.Remote.AddGRPCWireRemote:input_type -> meshnet.v1beta1.WireDef
-	8,  // 12: meshnet.v1beta1.WireProtocol.SendToOnce:input_type -> meshnet.v1beta1.Packet
-	8,  // 13: meshnet.v1beta1.WireProtocol.SendToStream:input_type -> meshnet.v1beta1.Packet
-	0,  // 14: meshnet.v1beta1.Local.Get:output_type -> meshnet.v1beta1.Pod
-	4,  // 15: meshnet.v1beta1.Local.SetAlive:output_type -> meshnet.v1beta1.BoolResponse
-	4,  // 16: meshnet.v1beta1.Local.SkipReverse:output_type -> meshnet.v1beta1.BoolResponse
-	4,  // 17: meshnet.v1beta1.Local.Skip:output_type -> meshnet.v1beta1.BoolResponse
-	4,  // 18: meshnet.v1beta1.Local.IsSkipped:output_type -> meshnet.v1beta1.BoolResponse
-	7,  // 19: meshnet.v1beta1.Local.GRPCWireExists:output_type -> meshnet.v1beta1.WireCreateResponse
-	4,  // 20: meshnet.v1beta1.Local.AddGRPCWireLocal:output_type -> meshnet.v1beta1.BoolResponse
-	4,  // 21: meshnet.v1beta1.Local.RemGRPCWire:output_type -> meshnet.v1beta1.BoolResponse
-	10, // 22: meshnet.v1beta1.Local.GenerateNodeInterfaceName:output_type -> meshnet.v1beta1.GenerateNodeInterfaceNameResponse
-	4,  // 23: meshnet.v1beta1.Remote.Update:output_type -> meshnet.v1beta1.BoolResponse
-	7,  // 24: meshnet.v1beta1.Remote.AddGRPCWireRemote:output_type -> meshnet.v1beta1.WireCreateResponse
-	4,  // 25: meshnet.v1beta1.WireProtocol.SendToOnce:output_type -> meshnet.v1beta1.BoolResponse
-	4,  // 26: meshnet.v1beta1.WireProtocol.SendToStream:output_type -> meshnet.v1beta1.BoolResponse
-	14, // [14:27] is the sub-list for method output_type
-	1,  // [1:14] is the sub-list for method input_type
+	6,  // 12: meshnet.v1beta1.Remote.GRPCWireDownRemote:input_type -> meshnet.v1beta1.WireDef
+	9,  // 13: meshnet.v1beta1.WireProtocol.SendToOnce:input_type -> meshnet.v1beta1.Packet
+	9,  // 14: meshnet.v1beta1.WireProtocol.SendToStream:input_type -> meshnet.v1beta1.Packet
+	0,  // 15: meshnet.v1beta1.Local.Get:output_type -> meshnet.v1beta1.Pod
+	4,  // 16: meshnet.v1beta1.Local.SetAlive:output_type -> meshnet.v1beta1.BoolResponse
+	4,  // 17: meshnet.v1beta1.Local.SkipReverse:output_type -> meshnet.v1beta1.BoolResponse
+	4,  // 18: meshnet.v1beta1.Local.Skip:output_type -> meshnet.v1beta1.BoolResponse
+	4,  // 19: meshnet.v1beta1.Local.IsSkipped:output_type -> meshnet.v1beta1.BoolResponse
+	7,  // 20: meshnet.v1beta1.Local.GRPCWireExists:output_type -> meshnet.v1beta1.WireCreateResponse
+	4,  // 21: meshnet.v1beta1.Local.AddGRPCWireLocal:output_type -> meshnet.v1beta1.BoolResponse
+	4,  // 22: meshnet.v1beta1.Local.RemGRPCWire:output_type -> meshnet.v1beta1.BoolResponse
+	11, // 23: meshnet.v1beta1.Local.GenerateNodeInterfaceName:output_type -> meshnet.v1beta1.GenerateNodeInterfaceNameResponse
+	4,  // 24: meshnet.v1beta1.Remote.Update:output_type -> meshnet.v1beta1.BoolResponse
+	7,  // 25: meshnet.v1beta1.Remote.AddGRPCWireRemote:output_type -> meshnet.v1beta1.WireCreateResponse
+	8,  // 26: meshnet.v1beta1.Remote.GRPCWireDownRemote:output_type -> meshnet.v1beta1.WireDownResponse
+	4,  // 27: meshnet.v1beta1.WireProtocol.SendToOnce:output_type -> meshnet.v1beta1.BoolResponse
+	4,  // 28: meshnet.v1beta1.WireProtocol.SendToStream:output_type -> meshnet.v1beta1.BoolResponse
+	15, // [15:29] is the sub-list for method output_type
+	1,  // [1:15] is the sub-list for method input_type
 	1,  // [1:1] is the sub-list for extension type_name
 	1,  // [1:1] is the sub-list for extension extendee
 	0,  // [0:1] is the sub-list for field type_name
@@ -1185,7 +1235,7 @@ func file_meshnet_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_meshnet_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   3,
 		},

@@ -2,7 +2,9 @@ package meshnet
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
 	"path/filepath"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -11,6 +13,7 @@ import (
 	glogrus "github.com/grpc-ecosystem/go-grpc-middleware/logging/logrus"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/reflection"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -79,18 +82,39 @@ func New(cfg Config) (*Meshnet, error) {
 	if err != nil {
 		return nil, err
 	}
+	// If the link type is GRPC then set the GRPC logging level to LevelNone
+	// Otherwise there will be GRPC log for every packet sent as for link type GRPC, GRPC is also the data-plane. This is too
+	// much of log that does not help in debugging and K8S does log rotation very frequently.
+	var svr *grpc.Server
+	lnkTyp := os.Getenv("INTER_NODE_LINK_TYPE")
+	if lnkTyp == "GRPC" { //+++rev: use the constant INTER_NODE_LINK_GRPC form plugin code. There need to be some shared constants between plugin and daemon.
+		svr = grpc.NewServer(cfg.GRPCOpts...)
+	} else {
+		svr = newServerWithLogging(cfg.GRPCOpts...)
+	}
+
 	m := &Meshnet{
 		config:  cfg,
 		rCfg:    rCfg,
 		kClient: kClient,
 		tClient: tClient,
 		lis:     lis,
-		s:       newServerWithLogging(cfg.GRPCOpts...),
+		s:       svr,
 	}
 	mpb.RegisterLocalServer(m.s, m)
 	mpb.RegisterRemoteServer(m.s, m)
 	mpb.RegisterWireProtocolServer(m.s, m)
 	reflection.Register(m.s)
+
+	// After server is registered, reduce logging if link type is GRPC
+	if lnkTyp == "GRPC" { //+++rev: use the constant INTER_NODE_LINK_GRPC form plugin code. There need to be some shared constants between plugin and daemon.
+		// Stop all Info, Warning, Error
+		grpclog.SetLoggerV2(grpclog.NewLoggerV2WithVerbosity(ioutil.Discard, ioutil.Discard, ioutil.Discard, 0))
+		// see Error/Fatal, but opt out on Info
+		//grpclog.SetLoggerV2(grpclog.NewLoggerV2WithVerbosity(ioutil.Discard, ioutil.Discard, os.Stderr, 0))
+		mnetdLogger.Infof("Enabled GRPC logging for Error and Fatal only. Disabled Info & Warning logs.")
+	}
+
 	return m, nil
 }
 
