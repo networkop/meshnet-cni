@@ -16,7 +16,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/vishvananda/netlink v1.1.1-0.20201029203352-d40f9887b852
 	google.golang.org/grpc v1.47.0
-	google.golang.org/protobuf v1.28.1
+	google.golang.org/protobuf v1.30.0
 	k8s.io/apimachinery v0.26.1
 	k8s.io/client-go v0.26.1
 	sigs.k8s.io/controller-runtime v0.14.5
@@ -30,12 +30,13 @@ require (
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
+	github.com/go-errors/errors v1.4.2
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.20.0 // indirect
 	github.com/go-openapi/swag v0.19.14 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/imdario/mergo v0.3.6 // indirect

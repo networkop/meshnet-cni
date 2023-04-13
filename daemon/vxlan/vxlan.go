@@ -22,10 +22,15 @@ func InitLogger() {
 
 // CreateOrUpdate creates or updates the vxlan on the node.
 func CreateOrUpdate(v *mpb.RemotePod) error {
-	/// Looking up default interface
-	_, srcIntf, err := getSource()
-	if err != nil {
-		return err
+	var srcIntf string
+	var err error
+	srcIntf = v.NodeIntf
+	if srcIntf == "" {
+		/// Looking up default interface
+		_, srcIntf, err = getSource()
+		if err != nil {
+			return err
+		}
 	}
 
 	// Creating koko Veth struct
