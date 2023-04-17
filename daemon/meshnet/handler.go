@@ -63,6 +63,7 @@ func (m *Meshnet) Get(ctx context.Context, pod *mpb.PodQuery) (*mpb.Pod, error) 
 
 	srcIP, _, _ := unstructured.NestedString(result.Object, "status", "src_ip")
 	netNs, _, _ := unstructured.NestedString(result.Object, "status", "net_ns")
+	containerId, _, _ := unstructured.NestedString(result.Object, "status", "container_id")
 	nodeIP := os.Getenv("HOST_IP")
 	nodeIntf := os.Getenv("HOST_INTF")
 
@@ -74,6 +75,7 @@ func (m *Meshnet) Get(ctx context.Context, pod *mpb.PodQuery) (*mpb.Pod, error) 
 		Links:  links,
 		NodeIp: nodeIP,
 		NodeIntf: nodeIntf,
+		ContainerId: containerId,
 	}, nil
 }
 
@@ -93,6 +95,10 @@ func (m *Meshnet) SetAlive(ctx context.Context, pod *mpb.Pod) (*mpb.BoolResponse
 
 		if err = unstructured.SetNestedField(result.Object, pod.NetNs, "status", "net_ns"); err != nil {
 			mnetdLogger.Errorf("Failed to update pod's net_ns")
+		}
+
+		if err = unstructured.SetNestedField(result.Object, pod.ContainerId, "status", "container_id"); err != nil {
+			mnetdLogger.Errorf("Failed to update pod's container_id")
 		}
 
 		return m.updateStatus(ctx, result, pod.KubeNs)

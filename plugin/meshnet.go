@@ -199,9 +199,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	//log.Infof("VxLan route is via %s@%s", srcIP, srcIntf)
 
-	// Marking pod as "alive" by setting its srcIP and NetNS
+	// Marking pod as "alive" by setting its srcIP and NetNS and ContainerId
 	localPod.NetNs = args.Netns
 	localPod.SrcIp = srcIP
+	localPod.ContainerId = args.ContainerID
 	log.Infof("Add: Setting pod alive status on meshnet daemon")
 	ok, err := meshnetClient.SetAlive(ctx, localPod)
 	if err != nil || !ok.Response {
@@ -410,7 +411,9 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 	log.Infof("Processing DEL request: %s", cniArgs.K8S_POD_NAME)
-
+	log.WithFields(log.Fields{
+		"args": fmt.Sprintf("%+v", args),
+	}).Info("DEL request arguments")
 	log.Info("Parsing cni .conf file")
 	n, result, err := loadConf(args.StdinData)
 	if err != nil {
@@ -426,8 +429,23 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	meshnetClient := mpb.NewLocalClient(conn)
 
+	log.Infof("Del: Retrieving pod's (%s@%s) metadata from meshnet daemon", string(cniArgs.K8S_POD_NAME), string(cniArgs.K8S_POD_NAMESPACE))
+	localPod, err := meshnetClient.Get(ctx, &mpb.PodQuery{
+		Name:   string(cniArgs.K8S_POD_NAME), // getting deatils of the current pod.
+		KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
+	})
+	if err != nil {
+		log.Infof("Del: Pod %s:%s is not in topology returning. err:%v", string(cniArgs.K8S_POD_NAMESPACE), string(cniArgs.K8S_POD_NAME), err)
+		return types.PrintResult(result, n.CNIVersion)
+	}
+	// if the current containerID is not the topo's current containerID, exit here b/c this is a duplicated DEL call.
+	if localPod.ContainerId != args.ContainerID {
+		log.Infof("Del: Pod %s:%s is a duplicate; skipping", string(cniArgs.K8S_POD_NAMESPACE), string(cniArgs.K8S_POD_NAME))
+		return nil
+	}
+
 	/* Tell daemon to close the grpc tunnel for this pod netns (if any) */
-	log.Infof("Del: Retrieving pod's metadata from meshnet daemon")
+	log.Infof("Del: Remove the pod's grpc tunnel, if any")
 	wireDef := mpb.WireDef{
 		KubeNs:       string(cniArgs.K8S_POD_NAMESPACE),
 		LocalPodName: string(cniArgs.K8S_POD_NAME),
@@ -438,21 +456,12 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("del: could not remove grpc wire: %v", err)
 	}
 
-	log.Infof("Del: Retrieving pod's (%s@%s) metadata from meshnet daemon", string(cniArgs.K8S_POD_NAME), string(cniArgs.K8S_POD_NAMESPACE))
-	localPod, err := meshnetClient.Get(ctx, &mpb.PodQuery{
-		Name:   string(cniArgs.K8S_POD_NAME), // getting deatils of the curretn pod.
-		KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
-	})
-	if err != nil {
-		log.Infof("Del: Pod %s:%s is not in topology returning. err:%v", string(cniArgs.K8S_POD_NAMESPACE), string(cniArgs.K8S_POD_NAME), err)
-		return types.PrintResult(result, n.CNIVersion)
-	}
-
 	localPodSrcIp := localPod.SrcIp
 	log.Infof("Del: Topology data still exists in CRs, cleaning up it's status")
 	// By setting srcIP and NetNS to "" we're marking this POD as dead
 	localPod.NetNs = ""
 	localPod.SrcIp = ""
+	localPod.ContainerId = ""
 	_, err = meshnetClient.SetAlive(ctx, localPod)
 	if err != nil {
 		return fmt.Errorf("del: could not set alive: %v", err)

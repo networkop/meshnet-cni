@@ -13,6 +13,7 @@ message Pod {
   repeated Link links = 5;
   string node_ip = 6;
   string node_intf = 7;
+  string container_id = 8;
 }
 
 message Link {
@@ -54,8 +55,8 @@ message RemotePod {
 message WireDef {
   // The remote machine interface id, to which this wire is connected to.
   //  When local machine sends a packet to remote mahcine over grpc-wire,
-  //  then along with the packet data, local machine also sends the interface id 
-  //  to whihc this packet needs to delivered in remote machine. It avoids any 
+  //  then along with the packet data, local machine also sends the interface id
+  //  to whihc this packet needs to delivered in remote machine. It avoids any
   //  per packet interface lookup at the remote end. Packet delivery becomes
   //  an O(1) operation at remote end.
   int64 peer_intf_id = 1;
@@ -66,12 +67,12 @@ message WireDef {
   // Interface name, which comes from topology definition and to be put
   // inside container.
   // This filed is used when grpc-wire to be created.
-  string intf_name_in_pod = 3;    
+  string intf_name_in_pod = 3;
 
   // Network name space of the local pod which is connected to this
   // grpc-wire
-  string local_pod_net_ns = 4;  
-    
+  string local_pod_net_ns = 4;
+
   // Each meshnet link has a uid.
   int64 link_uid = 5;
 
@@ -87,7 +88,7 @@ message WireDef {
   string kube_ns = 8;
 
   string local_pod_ip = 9;
-  
+
 }
 
 message WireCreateResponse {
@@ -101,8 +102,8 @@ message WireDownResponse {
 }
 
 message Packet {
-  // the remote machine interface id, to which this packet should be delivered. 
-  int64 remot_intf_id = 1;   
+  // the remote machine interface id, to which this packet should be delivered.
+  int64 remot_intf_id = 1;
   bytes frame = 2;
 }
 
@@ -114,7 +115,7 @@ message GenerateNodeInterfaceNameRequest {
 
 message GenerateNodeInterfaceNameResponse {
   bool ok = 1;
-  string node_intf_name = 2;   
+  string node_intf_name = 2;
 }
 
 service Local {
@@ -124,12 +125,12 @@ service Local {
   rpc Skip (SkipQuery) returns (BoolResponse);
   rpc IsSkipped (SkipQuery) returns (BoolResponse);
 
-  rpc GRPCWireExists(WireDef) returns (WireCreateResponse); 
+  rpc GRPCWireExists(WireDef) returns (WireCreateResponse);
   rpc AddGRPCWireLocal(WireDef) returns (BoolResponse);
   rpc RemGRPCWire(WireDef) returns (BoolResponse);
 
-  // A node is going to hold multiple veth to connect to multiple containers. 
-  // Each veth name must be unique with in a node. Daemon generates an ID that 
+  // A node is going to hold multiple veth to connect to multiple containers.
+  // Each veth name must be unique with in a node. Daemon generates an ID that
   // is unique in this node.
   rpc GenerateNodeInterfaceName(GenerateNodeInterfaceNameRequest) returns (GenerateNodeInterfaceNameResponse);
 }
