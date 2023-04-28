@@ -266,9 +266,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 				log.Infof("Does the link already exist? local pod %s and peer pod %s, Local:%t, Peer:%t", localPod.Name, peerPod.Name, iExist, pExist)
 				if iExist && pExist { // If both link exist, we don't need to do anything
-					log.Info("Both interfaces already exist in namespace local pod %s and peer pod %s", localPod.Name, peerPod.Name)
+					log.Infof("Both interfaces already exist in namespace local pod %s and peer pod %s", localPod.Name, peerPod.Name)
 				} else if !iExist && pExist { // If only peer link exists, we need to destroy it first
-					log.Info("Only peer link exists, removing it first local pod %s and peer pod %s", localPod.Name, peerPod.Name)
+					log.Infof("Only peer link exists, removing it first local pod %s and peer pod %s", localPod.Name, peerPod.Name)
 					if err := peerVeth.RemoveVethLink(); err != nil {
 						log.Errorf("Failed to remove a stale interface %s of my peer %s", peerVeth.LinkName, link.PeerPod)
 						return err
