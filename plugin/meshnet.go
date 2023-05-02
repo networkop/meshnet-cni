@@ -306,8 +306,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 					higherPrio := localPod.Name > peerPod.Name
 					log.Infof("DO we %s have a higher priority than peer %s ? %t", localPod.Name, peerPod.Name, higherPrio)
 
-					if isSkipped.Response || higherPrio { // If peer POD skipped us (booted before us) or we have a higher priority
-						log.Infof("Peer POD %s has skipped us or we %s have a higher priority", peerPod.Name, localPod.Name)
+					if isSkipped.Response || higherPrio || localPod.Name == peerPod.Name { // If peer POD skipped us (booted before us) or we have a higher priority or its a loopback link
+						log.Infof("Peer POD %s has skipped us or we %s have a higher priority or its loopback", peerPod.Name, localPod.Name)
 						if err = koko.MakeVeth(*myVeth, *peerVeth); err != nil {
 							log.Errorf("Error when creating a new VEth pair with koko: %s", err)
 							log.Infof("local pod %s and peer pod %s MY VETH STRUCT: %+v", localPod.Name, peerPod.Name, spew.Sdump(myVeth))
