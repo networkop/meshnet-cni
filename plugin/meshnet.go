@@ -243,6 +243,20 @@ func cmdAdd(args *skel.CmdArgs) error {
 			log.Errorf("Add: Failed to retrieve peer pod %s:%s topology", string(cniArgs.K8S_POD_NAMESPACE), link.PeerPod)
 			return err
 		}
+		if localPod.Name == peerPod.Name {
+			// for loopback veth case
+			peerVeth, err := makeVeth(peerPod.NetNs, link.PeerIntf, link.PeerIp)
+				if err != nil {
+					log.Errorf("Add: Failed to build koko Veth struct for loopback")
+					return err
+				}
+			if err = koko.MakeVeth(*myVeth, *peerVeth); err != nil {
+				log.Errorf("Error when creating a new VEth pair with koko for loopback: %s", err)
+				log.Infof("MY VETH STRUCT: %+v", spew.Sdump(myVeth))
+				log.Infof("PEER STRUCT: %+v", spew.Sdump(peerVeth))
+				return err
+			}
+		}
 
 		isAlive := peerPod.SrcIp != "" && peerPod.NetNs != ""
 		log.Infof("Add: Is peer pod %s alive?: %t", peerPod.Name, isAlive)
