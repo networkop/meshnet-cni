@@ -19,6 +19,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"strings"
+
 	mpb "github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
 	"github.com/networkop/meshnet-cni/utils/wireutil"
 )
@@ -245,16 +247,16 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		isAlive := peerPod.SrcIp != "" && peerPod.NetNs != ""
-		log.Infof("Add: Is peer pod %s alive?: %t", peerPod.Name, isAlive)
+		log.Infof("Add: Is peer pod %s alive?: %t, local pod %s", peerPod.Name, isAlive, localPod.Name)
 
 		if isAlive { // This means we're coming up AFTER our peer so things are pretty easy
-			log.Infof("Add: Peer pod %s is alive", peerPod.Name)
+			log.Infof("Add: Peer pod %s is alive, local pod %s", peerPod.Name, localPod.Name)
 			if peerPod.SrcIp == localPod.SrcIp { // This means we're on the same host
 				log.Infof("Add: %s and %s are on the same host", localPod.Name, peerPod.Name)
 				// Creating koko's Veth struct for peer intf
 				peerVeth, err := makeVeth(peerPod.NetNs, link.PeerIntf, link.PeerIp)
 				if err != nil {
-					log.Errorf("Add: Failed to build koko Veth struct")
+					log.Errorf("Add: Failed to build koko Veth struct local pod %s and peer pod %s", localPod.Name, peerPod.Name)
 					return err
 				}
 
@@ -262,59 +264,63 @@ func cmdAdd(args *skel.CmdArgs) error {
 				iExist, _ := koko.IsExistLinkInNS(myVeth.NsName, myVeth.LinkName)
 				pExist, _ := koko.IsExistLinkInNS(peerVeth.NsName, peerVeth.LinkName)
 
-				log.Infof("Does the link already exist? Local:%t, Peer:%t", iExist, pExist)
+				log.Infof("Does the link already exist? local pod %s and peer pod %s, Local:%t, Peer:%t", localPod.Name, peerPod.Name, iExist, pExist)
 				if iExist && pExist { // If both link exist, we don't need to do anything
-					log.Info("Both interfaces already exist in namespace")
+					log.Infof("Both interfaces already exist in namespace local pod %s and peer pod %s", localPod.Name, peerPod.Name)
 				} else if !iExist && pExist { // If only peer link exists, we need to destroy it first
-					log.Info("Only peer link exists, removing it first")
+					log.Infof("Only peer link exists, removing it first local pod %s and peer pod %s", localPod.Name, peerPod.Name)
 					if err := peerVeth.RemoveVethLink(); err != nil {
 						log.Errorf("Failed to remove a stale interface %s of my peer %s", peerVeth.LinkName, link.PeerPod)
 						return err
 					}
-					log.Infof("Adding the new veth link to both pods")
+					log.Infof("Adding the new veth link to both pods local pod %s and peer pod %s", localPod.Name, peerPod.Name)
 					if err = koko.MakeVeth(*myVeth, *peerVeth); err != nil {
-						log.Errorf("Error creating VEth pair after peer link remove: %s", err)
+						log.Errorf("Error creating VEth pair after peer link remove: %s, local pod %s and peer pod %s", err, localPod.Name, peerPod.Name)
 						return err
 					}
 				} else if iExist && !pExist { // If only local link exists, we need to destroy it first
-					log.Infof("Only local link exists, removing it first")
+					log.Infof("Only local link exists, removing it first local pod %s and peer pod %s", localPod.Name, peerPod.Name)
 					if err := myVeth.RemoveVethLink(); err != nil {
 						log.Errorf("Failed to remove a local stale VEth interface %s for pod %s", myVeth.LinkName, localPod.Name)
 						return err
 					}
-					log.Infof("Adding the new veth link to both pods")
+					log.Infof("Adding the new veth link to both pods local pod %s and peer pod %s", localPod.Name, peerPod.Name)
 					if err = koko.MakeVeth(*myVeth, *peerVeth); err != nil {
-						log.Errorf("Error creating VEth pair after local link remove: %s", err)
+						log.Errorf("Error creating VEth pair after local link remove: %s, local pod %s and peer pod %s", err, localPod.Name, peerPod.Name)
 						return err
 					}
 				} else { // if neither link exists, we have two options
-					log.Infof("Neither link exists. Checking if we've been skipped")
+					log.Infof("Neither link exists. Checking if we've been skipped local pod %s and peer pod %s", localPod.Name, peerPod.Name)
 					isSkipped, err := meshnetClient.IsSkipped(ctx, &mpb.SkipQuery{
 						Pod:    localPod.Name,
 						Peer:   peerPod.Name,
 						KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
 					})
 					if err != nil {
-						log.Errorf("Failed to read skipped status from our peer")
+						log.Errorf("Local pod %s Failed to read skipped status from our peer %s", localPod.Name, peerPod.Name)
 						return err
 					}
-					log.Infof("Have we been skipped by our peer %s? %t", peerPod.Name, isSkipped.Response)
+					log.Infof("Have we %s been skipped by our peer %s? %t", localPod.Name, peerPod.Name, isSkipped.Response)
 
 					// Comparing names to determine higher priority
 					higherPrio := localPod.Name > peerPod.Name
-					log.Infof("DO we have a higher priority? %t", higherPrio)
+					log.Infof("DO we %s have a higher priority than peer %s ? %t", localPod.Name, peerPod.Name, higherPrio)
 
 					if isSkipped.Response || higherPrio { // If peer POD skipped us (booted before us) or we have a higher priority
-						log.Infof("Peer POD has skipped us or we have a higher priority")
+						log.Infof("Peer POD %s has skipped us or we %s have a higher priority", peerPod.Name, localPod.Name)
 						if err = koko.MakeVeth(*myVeth, *peerVeth); err != nil {
 							log.Errorf("Error when creating a new VEth pair with koko: %s", err)
-							log.Infof("MY VETH STRUCT: %+v", spew.Sdump(myVeth))
-							log.Infof("PEER STRUCT: %+v", spew.Sdump(peerVeth))
-							return err
+							log.Infof("local pod %s and peer pod %s MY VETH STRUCT: %+v", localPod.Name, peerPod.Name, spew.Sdump(myVeth))
+							log.Infof("local pod %s and peer pod %s PEER STRUCT: %+v", localPod.Name, peerPod.Name, spew.Sdump(peerVeth))
+							if strings.Contains(err.Error(), "file exists") {
+								log.Infof("race condition hit local pod %s and peer pod %s", localPod.Name, peerPod.Name)
+							} else {
+							    return err
+							}
 						}
 					} else { // peerPod has higherPrio and hasn't skipped us
 						// In this case we do nothing, since the pod with a higher IP is supposed to connect veth pair
-						log.Infof("Doing nothing, expecting peer pod %s to connect veth pair", peerPod.Name)
+						log.Infof("Doing nothing, expecting peer pod %s to connect veth pair with local pod %s", peerPod.Name, localPod.Name)
 						continue
 					}
 				}
