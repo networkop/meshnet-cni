@@ -14,6 +14,10 @@ items:
       local_ip: 12.12.12.1/24
       peer_intf: eth1
       peer_ip: 12.12.12.2/24
+    - uid: 2
+      peer_pod: r1
+      local_intf: eth2
+      peer_intf: eth3
 - apiVersion: networkop.co.uk/v1beta1
   kind: Topology
   metadata:
