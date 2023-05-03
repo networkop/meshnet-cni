@@ -9,11 +9,8 @@ import (
 	"github.com/networkop/meshnet-cni/daemon/grpcwire"
 	"github.com/networkop/meshnet-cni/daemon/meshnet"
 	"github.com/networkop/meshnet-cni/daemon/vxlan"
+	"github.com/networkop/meshnet-cni/utils/wireutil"
 	log "github.com/sirupsen/logrus"
-)
-
-const (
-	defaultPort = 51111
 )
 
 func main() {
@@ -27,7 +24,7 @@ func main() {
 	isDebug := flag.Bool("d", false, "enable degugging")
 	grpcPort, err := strconv.Atoi(os.Getenv("GRPC_PORT"))
 	if err != nil || grpcPort == 0 {
-		grpcPort = defaultPort
+		grpcPort = wireutil.GRPCDefaultPort
 	}
 	flag.Parse()
 	log.SetLevel(log.InfoLevel)
@@ -44,13 +41,22 @@ func main() {
 		Port: grpcPort,
 	})
 	if err != nil {
-		log.Errorf("Failed to create meshnet: %v", err)
+		log.Errorf("failed to create meshnet: %v", err)
 		os.Exit(1)
 	}
 	log.Info("Starting meshnet daemon...with grpc support")
 
+	grpcwire.SetGWireClient(m.GWireDynClient)
+
+	// read grpcwire info (if any) from data store and update local db
+	err = grpcwire.ReconGWires()
+	if err != nil {
+		log.Errorf("could not reconcile grpc wire: %v", err)
+		// generate error and continue
+	}
+
 	if err := m.Serve(); err != nil {
-		log.Errorf("Daemon exited badly: %v", err)
+		log.Errorf("daemon exited badly: %v", err)
 		os.Exit(1)
 	}
 }
