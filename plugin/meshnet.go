@@ -256,6 +256,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				log.Infof("PEER STRUCT: %+v", spew.Sdump(peerVeth))
 				return err
 			}
+			continue
 		}
 
 		isAlive := peerPod.SrcIp != "" && peerPod.NetNs != ""
