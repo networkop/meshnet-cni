@@ -47,10 +47,16 @@ spec:
           status:
             properties:
               skipped:
-                description: 'List of pods that are skipped by local pod'
+                description: 'List of pods/interfaces that are skipped by local pod'
                 items:
-                  description: 'peer pod name'
-                  type: string
+                  properties:
+                    link_id:
+                      format: int64
+                      type: integer
+                    pod_name:
+                      description: 'peer pod name'
+                      type: string                  
+                  type: object
                 type: array
               src_ip:
                 description: 'Source IP of the POD'

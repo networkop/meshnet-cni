@@ -22,6 +22,8 @@ require (
 	sigs.k8s.io/controller-runtime v0.14.5
 )
 
+require google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.3.0 // indirect
+
 require (
 	github.com/Microsoft/go-winio v0.4.11 // indirect
 	github.com/docker/distribution v2.8.0+incompatible // indirect

@@ -31,9 +31,10 @@ message PodQuery {
 }
 
 message SkipQuery {
-  string pod = 1;
+  string pod = 1;  
   string peer = 2;
   string kube_ns = 3;
+  int64 link_id = 4;  
 }
 
 message BoolResponse {

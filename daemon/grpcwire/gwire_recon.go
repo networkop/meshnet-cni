@@ -209,7 +209,7 @@ func ReconGWires() error {
 
 // -----------------------------------------------------------------------------------------------------------
 // updateGRPCWireStatus writes grpc wire 'wStatus' into k8s data-store. 'wStatus' for all existing grpc wires are added
-// under 'grpcWireItems' as prt of status. Status is part of 'GWireKObj' and identified
+// under 'grpcWireItems' as part of status. Status is part of 'GWireKObj' and identified
 // by name=<current-node-name>. For the first write, this object for a node does not exist in k8s data-
 // store. So for first write, it creates the object and then adds the 'wStatus'. For all subsequent 'wStatus'
 // to be added, first get the object from data-store, append the 'wStatus' to the existing list of
@@ -229,7 +229,8 @@ func updateGRPCWireStatus(ctx context.Context, wStatus *grpcwirev1.GWireStatus) 
 				if err != nil {
 					return err
 				}
-				grpcOvrlyLogger.Infof("updateGRPCWireStatus: Created node %s, pod %s@%s into k8s data-store", wStatus.LocalNodeName, wStatus.LocalPodName, wStatus.LocalPodIfaceName)
+				grpcOvrlyLogger.Infof("updateGRPCWireStatus: Created node %s, pod %s@%s into k8s data-store",
+					wStatus.LocalNodeName, wStatus.LocalPodName, wStatus.LocalPodIfaceName)
 				return nil
 			}
 
@@ -243,11 +244,11 @@ func updateGRPCWireStatus(ctx context.Context, wStatus *grpcwirev1.GWireStatus) 
 			return err
 		}
 		if !found {
-			grpcOvrlyLogger.Errorf("updateGRPCWireStatus: gwireItems not found in GWireKObj status, retrieved from k8s data-store")
+			grpcOvrlyLogger.Errorf("updateGRPCWireStatus: gwireItems not found in GWireKObj status")
 			return err
 		}
 		if gwireItems == nil {
-			grpcOvrlyLogger.Errorf("updateGRPCWireStatus: gwireItems is nil in GWireKObj status, retrieved from k8s data-store")
+			grpcOvrlyLogger.Errorf("updateGRPCWireStatus: gwireItems is nil in GWireKObj status")
 			return err
 		}
 		newItem, err := runtime.DefaultUnstructuredConverter.ToUnstructured(wStatus)
@@ -301,13 +302,13 @@ func CreateGWireStatInDS(ctx context.Context, wStatus *grpcwirev1.GWireStatus) e
 	}
 	uWbj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(wObj)
 	if err != nil {
-		grpcOvrlyLogger.Errorf("CreateGWireStatInDataStore: could not create unstructured for new wire: %v", err)
+		grpcOvrlyLogger.Errorf("CreateGWireStatInDS: could not create unstructured for new wire: %v", err)
 		return err
 	}
 
 	_, err = gWClient.CreatWireObj(ctx, wStatus.TopoNamespace, uWbj)
 	if err != nil {
-		grpcOvrlyLogger.Errorf("updateGRPCWireStatus: Could not create node %s, pod %s@%s into k8s data-store: %v",
+		grpcOvrlyLogger.Errorf("CreateGWireStatInDS: Could not create node %s, pod %s@%s into k8s data-store: %v",
 			wStatus.LocalNodeName, wStatus.LocalPodName, wStatus.LocalPodIfaceName, err)
 		return err
 	}

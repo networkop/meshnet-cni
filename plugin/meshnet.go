@@ -171,8 +171,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err := types.LoadArgs(args.Args, &cniArgs); err != nil {
 		return err
 	}
-	log.Infof(" -------> Processing ADD POD %s in namespace %s, container_id %s", string(cniArgs.K8S_POD_NAME), string(cniArgs.K8S_POD_NAMESPACE), string(cniArgs.K8S_POD_INFRA_CONTAINER_ID))
-	defer log.Infof("DONE -------> Processing ADD POD %s in namespace %s, container_id %s", string(cniArgs.K8S_POD_NAME), string(cniArgs.K8S_POD_NAMESPACE), string(cniArgs.K8S_POD_INFRA_CONTAINER_ID))
+	log.Infof("Processing ADD POD %s in namespace %s, container_id %s", string(cniArgs.K8S_POD_NAME), string(cniArgs.K8S_POD_NAMESPACE), string(cniArgs.K8S_POD_INFRA_CONTAINER_ID))
+	defer log.Infof("DONE > Processing ADD POD %s in namespace %s, container_id %s", string(cniArgs.K8S_POD_NAME), string(cniArgs.K8S_POD_NAMESPACE), string(cniArgs.K8S_POD_INFRA_CONTAINER_ID))
 
 	log.Infof("Attempting to connect to local meshnet daemon")
 	conn, err := grpc.Dial(localDaemon, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -290,24 +290,25 @@ func cmdAdd(args *skel.CmdArgs) error {
 						return err
 					}
 				} else { // if neither link exists, we have two options
-					log.Infof("Add[%s]: Neither link exists. Checking if we've been skipped", string(cniArgs.K8S_POD_NAME))
+					log.Infof("Add[%s]: Neither link exists. Checking if we've been skipped for interface %s (link id %d)", string(cniArgs.K8S_POD_NAME), link.LocalIntf, link.Uid)
 					isSkipped, err := meshnetClient.IsSkipped(ctx, &mpb.SkipQuery{
 						Pod:    localPod.Name,
 						Peer:   peerPod.Name,
+						LinkId: link.Uid,
 						KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
 					})
 					if err != nil {
 						log.Errorf("Add[%s]: Failed to read skipped status from our peer", string(cniArgs.K8S_POD_NAME))
 						return err
 					}
-					log.Infof("Add[%s]: Have we been skipped by our peer %s? %t", string(cniArgs.K8S_POD_NAME), peerPod.Name, isSkipped.Response)
+					log.Infof("Add[%s]: Have we been skipped for %s (link id %d) by our peer %s? %t", string(cniArgs.K8S_POD_NAME), link.LocalIntf, link.Uid, peerPod.Name, isSkipped.Response)
 
 					// Comparing names to determine higher priority
 					higherPrio := localPod.Name > peerPod.Name
-					log.Infof("Add[%s]: DO we have a higher priority? %t", string(cniArgs.K8S_POD_NAME), higherPrio)
+					log.Infof("Add[%s]: Do we have a higher priority? %t", string(cniArgs.K8S_POD_NAME), higherPrio)
 
 					if isSkipped.Response || higherPrio { // If peer POD skipped us (booted before us) or we have a higher priority
-						log.Infof("Add[%s]: Peer POD has skipped us or we have a higher priority", string(cniArgs.K8S_POD_NAME))
+						log.Infof("Add[%s]: Peer POD has skipped us for %s (link id %d) or we have a higher priority", string(cniArgs.K8S_POD_NAME), link.LocalIntf, link.Uid)
 						if err = koko.MakeVeth(*myVeth, *peerVeth); err != nil {
 							log.Errorf("Add[%s]: Error when creating a new VEth pair with koko: %s", string(cniArgs.K8S_POD_NAME), err)
 							log.Infof("Add[%s]: MY VETH STRUCT: %+v", string(cniArgs.K8S_POD_NAME), spew.Sdump(myVeth))
@@ -385,11 +386,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 		} else { // This means that our peer pod hasn't come up yet
 			// Since there's no way of telling if our peer is going to be on this host or another,
 			// the only option is to do nothing, assuming that the peer POD will do all the plumbing when it comes up
-			log.Infof("Add[%s]: Peer pod %s isn't alive yet, continuing", string(cniArgs.K8S_POD_NAME), peerPod.Name)
+			log.Infof("Add[%s]: Peer pod %s@%s (link id %d) isn't alive yet, continuing", string(cniArgs.K8S_POD_NAME), peerPod.Name, link.PeerIntf, link.Uid)
 			// Here we need to set the skipped flag so that our peer can configure VEth interface when it comes up later
 			ok, err := meshnetClient.Skip(ctx, &mpb.SkipQuery{
 				Pod:    localPod.Name,
 				Peer:   peerPod.Name,
+				LinkId: link.Uid,
 				KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
 			})
 			if err != nil || !ok.Response {
@@ -511,10 +513,11 @@ func cmdDel(args *skel.CmdArgs) error {
 		}
 
 		// Setting reversed skipped flag so that this pod will try to connect veth pair on restart
-		log.Infof("Del: Setting skip-reverse flag on peer %s", link.PeerPod)
+		log.Infof("Del: Setting skip-reverse flag on peer %s@%s(link id %d) for local interface %s", link.PeerPod, link.PeerIntf, link.Uid, link.LocalIntf)
 		ok, err := meshnetClient.SkipReverse(ctx, &mpb.SkipQuery{
 			Pod:    localPod.Name,
 			Peer:   link.PeerPod,
+			LinkId: link.Uid,
 			KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
 		})
 		if err != nil || !ok.Response {
@@ -556,7 +559,7 @@ func main() {
 		log.Errorf("failed to run meshnet cni: %v", e.Print())
 		retCode = 1
 	}
-	log.Infof("meshnet cni call successful")
+	log.Infof("K8S invoked meshnet cni")
 	fp.Close()
 	os.Exit(retCode)
 }

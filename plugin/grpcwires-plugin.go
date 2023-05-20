@@ -34,10 +34,11 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 		localPod.Name, localPod.Name, link.LocalIntf, localPod.SrcIp,
 		link.Uid, peerPod.Name, link.PeerIntf, peerPod.SrcIp)
 
-	log.Infof("Add-GRPC[%s]: Checking if we've been skipped", localPod.Name)
+	log.Infof("Add-GRPC[%s]: Checking if we've been skipped for link id %d", localPod.Name, link.Uid)
 	isSkipped, err := localClient.IsSkipped(ctx, &mpb.SkipQuery{
 		Pod:    localPod.Name,
 		Peer:   peerPod.Name,
+		LinkId: link.Uid,
 		KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
 	})
 
@@ -83,6 +84,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 			isSkipped, err = localClient.IsSkipped(ctx, &mpb.SkipQuery{
 				Pod:    localPod.Name,
 				Peer:   peerPod.Name,
+				LinkId: link.Uid,
 				KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
 			})
 			if err != nil {
