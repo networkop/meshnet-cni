@@ -15,12 +15,19 @@ import (
 	"k8s.io/client-go/util/retry"
 
 	"github.com/google/gopacket/pcap"
+	topologyv1 "github.com/networkop/meshnet-cni/api/types/v1beta1"
 	mpb "github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
 )
 
+// TODO: Migrate from getPod to getTopo b/c simpler.
 func (m *Meshnet) getPod(ctx context.Context, name, ns string) (*unstructured.Unstructured, error) {
 	mnetdLogger.Infof("Reading pod %s from K8s", name)
 	return m.tClient.Topology(ns).Unstructured(ctx, name, metav1.GetOptions{})
+}
+
+func (m *Meshnet) getTopo(ctx context.Context, name, ns string) (*topologyv1.Topology, error) {
+	mnetdLogger.Infof("Reading topology %s/%s from K8s", ns, name)
+	return m.tClient.Topology(ns).Get(ctx, name, metav1.GetOptions{})
 }
 
 func (m *Meshnet) updateStatus(ctx context.Context, obj *unstructured.Unstructured, ns string) error {
@@ -29,54 +36,41 @@ func (m *Meshnet) updateStatus(ctx context.Context, obj *unstructured.Unstructur
 	return err
 }
 
+// You know, this is really unfortunate choice of names in meshnet.proto.
+func (m *Meshnet) makePod(topo *topologyv1.Topology) *mpb.Pod {
+	links := make([]*mpb.Link, len(topo.Spec.Links))
+	for i := range links {
+		links[i] = &mpb.Link{
+			PeerPod:   topo.Spec.Links[i].PeerPod,
+			LocalIntf: topo.Spec.Links[i].LocalIntf,
+			PeerIntf:  topo.Spec.Links[i].PeerIntf,
+			LocalIp:   topo.Spec.Links[i].LocalIP,
+			PeerIp:    topo.Spec.Links[i].PeerIP,
+			Uid:       int64(topo.Spec.Links[i].UID),
+		}
+	}
+	return &mpb.Pod{
+		Name:        topo.Name,
+		SrcIp:       topo.Status.SrcIP,
+		NetNs:       topo.Status.NetNS,
+		KubeNs:      topo.Namespace,
+		Links:       links,
+		NodeIp:      os.Getenv("HOST_IP"),
+		NodeIntf:    os.Getenv("HOST_INTF"),
+		ContainerId: topo.Status.ContainerID,
+	}
+}
+
 func (m *Meshnet) Get(ctx context.Context, pod *mpb.PodQuery) (*mpb.Pod, error) {
 	mnetdLogger.Infof("Retrieving %s's metadata from K8s...", pod.Name)
 
-	result, err := m.getPod(ctx, pod.Name, pod.KubeNs)
+	result, err := m.getTopo(ctx, pod.Name, pod.KubeNs)
 	if err != nil {
 		mnetdLogger.Errorf("Failed to read pod %s from K8s", pod.Name)
 		return nil, err
 	}
 
-	remoteLinks, found, err := unstructured.NestedSlice(result.Object, "spec", "links")
-	if err != nil || !found || remoteLinks == nil {
-		mnetdLogger.Errorf("Could not find 'Link' array in pod's spec")
-		return nil, err
-	}
-
-	links := make([]*mpb.Link, len(remoteLinks))
-	for i := range links {
-		remoteLink, ok := remoteLinks[i].(map[string]interface{})
-		if !ok {
-			mnetdLogger.Errorf("Unrecognised 'Link' structure")
-			return nil, err
-		}
-		newLink := &mpb.Link{}
-		newLink.PeerPod, _, _ = unstructured.NestedString(remoteLink, "peer_pod")
-		newLink.PeerIntf, _, _ = unstructured.NestedString(remoteLink, "peer_intf")
-		newLink.LocalIntf, _, _ = unstructured.NestedString(remoteLink, "local_intf")
-		newLink.LocalIp, _, _ = unstructured.NestedString(remoteLink, "local_ip")
-		newLink.PeerIp, _, _ = unstructured.NestedString(remoteLink, "peer_ip")
-		newLink.Uid, _, _ = unstructured.NestedInt64(remoteLink, "uid")
-		links[i] = newLink
-	}
-
-	srcIP, _, _ := unstructured.NestedString(result.Object, "status", "src_ip")
-	netNs, _, _ := unstructured.NestedString(result.Object, "status", "net_ns")
-	containerId, _, _ := unstructured.NestedString(result.Object, "status", "container_id")
-	nodeIP := os.Getenv("HOST_IP")
-	nodeIntf := os.Getenv("HOST_INTF")
-
-	return &mpb.Pod{
-		Name:   pod.Name,
-		SrcIp:  srcIP,
-		NetNs:  netNs,
-		KubeNs: pod.KubeNs,
-		Links:  links,
-		NodeIp: nodeIP,
-		NodeIntf: nodeIntf,
-		ContainerId: containerId,
-	}, nil
+	return m.makePod(result), nil
 }
 
 func (m *Meshnet) SetAlive(ctx context.Context, pod *mpb.Pod) (*mpb.BoolResponse, error) {
@@ -461,4 +455,24 @@ func (m *Meshnet) GenerateNodeInterfaceName(ctx context.Context, in *mpb.Generat
 		return &mpb.GenerateNodeInterfaceNameResponse{Ok: false, NodeIntfName: ""}, err
 	}
 	return &mpb.GenerateNodeInterfaceNameResponse{Ok: true, NodeIntfName: locIfNm}, nil
+}
+
+// API calls for grafana
+func (m *Meshnet) getTopoList(ctx context.Context, ns string) (*topologyv1.TopologyList, error) {
+	mnetdLogger.Infof("Reading topologies from %s", ns)
+	return m.tClient.Topology(ns).List(ctx, metav1.ListOptions{})
+}
+
+func (m *Meshnet) ListTopos(ctx context.Context, ns *mpb.TopoReq) (*mpb.TopoList, error) {
+	mnetdLogger.Infof("Retrieving topology from %s", ns.KubeNs)
+	result, err := m.getTopoList(ctx, ns.KubeNs)
+	if err != nil {
+		mnetdLogger.Errorf("Failed to read topologies from %s", ns.KubeNs)
+		return nil, err
+	}
+	topos := make([]*mpb.Pod, len(result.Items))
+	for i, obj := range result.Items {
+		topos[i] = m.makePod(&obj)
+	}
+	return &mpb.TopoList{Pods: topos}, nil
 }
