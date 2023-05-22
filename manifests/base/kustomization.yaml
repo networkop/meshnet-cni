@@ -5,6 +5,7 @@ commonLabels:
   app: meshnet
 resources:
 - namespace.yaml
+- service.yaml
 - serviceaccount.yaml
 - crd.yaml
 - rbac.yaml

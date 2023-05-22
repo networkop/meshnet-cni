@@ -6,12 +6,13 @@ WORKDIR /src
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 RUN go install github.com/bufbuild/buf/cmd/buf@v1.13.1
+RUN go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@latest
 
 COPY daemon/proto .
 COPY buf.gen.yaml .
 COPY buf.yaml .
 
-RUN buf lint && buf generate -v
+RUN buf mod update && buf lint && buf generate -v
 
 #---------------------------------------------- Stage 2: Build Base : Build mesnet binraries (Plugin & daemon) - ---------------------------------
 # Building the binaries
@@ -27,7 +28,6 @@ RUN go mod download; \
     apt-get update -y; \
     apt-get install -y libpcap-dev; \
     apt-get install -y libsystemd-dev;
- 
     # apt-get install -y libmnl; \
     # apt-get install -y libmnl-dev; \
     # go get github.com/chamaken/cgolmnl
@@ -45,8 +45,8 @@ COPY utils/ utils/
 COPY --from=proto_base /src/ .
 
 
-RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o meshnet plugin/meshnet.go plugin/grpcwires-plugin.go 
-RUN GOOS=${TARGETOS} CGO_ENABLED=1 GOARCH=${TARGETARCH} go build -ldflags="-s -w" -o meshnetd daemon/main.go; 
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o meshnet plugin/meshnet.go plugin/grpcwires-plugin.go
+RUN GOOS=${TARGETOS} CGO_ENABLED=1 GOARCH=${TARGETARCH} go build -ldflags="-s -w" -o meshnetd daemon/main.go;
 
 
 #----------------------------------------------------- Final Conatiner ---------------------------------
@@ -55,11 +55,11 @@ RUN GOOS=${TARGETOS} CGO_ENABLED=1 GOARCH=${TARGETARCH} go build -ldflags="-s -w
 #     apk add --no-cache jq
 
 FROM ubuntu:20.04
-RUN apt-get update; \ 
+RUN apt-get update; \
     apt-get install -y jq; \
     apt-get install -y libpcap-dev
 
-# apt-get install -y libpcap-dev; \  
+# apt-get install -y libpcap-dev; \
 
 COPY --from=build /go/src/github.com/networkop/meshnet-cni/meshnet /
 COPY --from=build /go/src/github.com/networkop/meshnet-cni/meshnetd /

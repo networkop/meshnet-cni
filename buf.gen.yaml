@@ -6,3 +6,6 @@ plugins:
   - name: go
     out: .
     opt: paths=source_relative
+  - name: grpc-gateway
+    out: .
+    opt: paths=source_relative

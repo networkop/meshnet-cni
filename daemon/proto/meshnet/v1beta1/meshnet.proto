@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package meshnet.v1beta1;
 
+import "google/api/annotations.proto";
+
 // The Go package name is the version.
 option go_package = "github.com/networkop/meshnet/v1beta1";
 
@@ -144,4 +146,26 @@ service Remote {
 service WireProtocol {
   rpc SendToOnce (Packet) returns (BoolResponse);
   rpc SendToStream (stream Packet) returns (BoolResponse);
+}
+
+// Grafana services
+
+// Eventually I want to implement the datasource proto and use the gRPC datasource plugin,
+// but for now we're going to cheap out with REST+JSON and reshape the data in the grafana
+// query.
+
+message TopoReq {
+  string kube_ns = 1;
+}
+
+message TopoList {
+  repeated Pod pods = 1;
+}
+
+service Grafana {
+  rpc ListTopos(TopoReq) returns (TopoList) {
+    option (google.api.http) = {
+      get: "/v1/meshnet/topos/{kube_ns}"
+    };
+  };
 }
