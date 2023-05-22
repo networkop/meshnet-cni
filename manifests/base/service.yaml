@@ -1,0 +1,18 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: meshnet
+spec:
+  selector:
+    name: meshnet
+  type: ClusterIP
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 51111
+      targetPort: 51111
+    - name: http
+      protocol: TCP
+      port: 51112
+      targetPort: 51112
