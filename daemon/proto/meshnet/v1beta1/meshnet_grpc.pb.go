@@ -735,3 +735,93 @@ var WireProtocol_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "daemon/proto/meshnet/v1beta1/meshnet.proto",
 }
+
+const (
+	Grafana_ListTopos_FullMethodName = "/meshnet.v1beta1.Grafana/ListTopos"
+)
+
+// GrafanaClient is the client API for Grafana service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type GrafanaClient interface {
+	ListTopos(ctx context.Context, in *TopoReq, opts ...grpc.CallOption) (*TopoList, error)
+}
+
+type grafanaClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewGrafanaClient(cc grpc.ClientConnInterface) GrafanaClient {
+	return &grafanaClient{cc}
+}
+
+func (c *grafanaClient) ListTopos(ctx context.Context, in *TopoReq, opts ...grpc.CallOption) (*TopoList, error) {
+	out := new(TopoList)
+	err := c.cc.Invoke(ctx, Grafana_ListTopos_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// GrafanaServer is the server API for Grafana service.
+// All implementations must embed UnimplementedGrafanaServer
+// for forward compatibility
+type GrafanaServer interface {
+	ListTopos(context.Context, *TopoReq) (*TopoList, error)
+	mustEmbedUnimplementedGrafanaServer()
+}
+
+// UnimplementedGrafanaServer must be embedded to have forward compatible implementations.
+type UnimplementedGrafanaServer struct {
+}
+
+func (UnimplementedGrafanaServer) ListTopos(context.Context, *TopoReq) (*TopoList, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListTopos not implemented")
+}
+func (UnimplementedGrafanaServer) mustEmbedUnimplementedGrafanaServer() {}
+
+// UnsafeGrafanaServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to GrafanaServer will
+// result in compilation errors.
+type UnsafeGrafanaServer interface {
+	mustEmbedUnimplementedGrafanaServer()
+}
+
+func RegisterGrafanaServer(s grpc.ServiceRegistrar, srv GrafanaServer) {
+	s.RegisterService(&Grafana_ServiceDesc, srv)
+}
+
+func _Grafana_ListTopos_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TopoReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GrafanaServer).ListTopos(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Grafana_ListTopos_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GrafanaServer).ListTopos(ctx, req.(*TopoReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// Grafana_ServiceDesc is the grpc.ServiceDesc for Grafana service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var Grafana_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "meshnet.v1beta1.Grafana",
+	HandlerType: (*GrafanaServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListTopos",
+			Handler:    _Grafana_ListTopos_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "daemon/proto/meshnet/v1beta1/meshnet.proto",
+}
