@@ -34,6 +34,7 @@ type Meshnet struct {
 	mpb.UnimplementedLocalServer
 	mpb.UnimplementedRemoteServer
 	mpb.UnimplementedWireProtocolServer
+	mpb.UnimplementedGrafanaServer
 	config  Config
 	kClient kubernetes.Interface
 	tClient topologyclientv1.Interface
@@ -104,6 +105,7 @@ func New(cfg Config) (*Meshnet, error) {
 	mpb.RegisterLocalServer(m.s, m)
 	mpb.RegisterRemoteServer(m.s, m)
 	mpb.RegisterWireProtocolServer(m.s, m)
+	mpb.RegisterGrafanaServer(m.s, m)
 	reflection.Register(m.s)
 
 	// After server is registered, reduce logging if link type is GRPC
