@@ -15,3 +15,5 @@ lint:
 breaking:
   use:
     - WIRE_JSON
+deps:
+  - buf.build/googleapis/googleapis
