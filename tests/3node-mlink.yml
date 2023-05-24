@@ -1,11 +1,17 @@
 ---
 apiVersion: v1
+kind: Namespace
+metadata:
+  name: "mlink"
+---
+apiVersion: v1
 kind: List
 items:
 - apiVersion: networkop.co.uk/v1beta1
   kind: Topology
   metadata:
     name: r1
+    namespace: "mlink"
   spec:
     links:
     - uid: 1
@@ -60,6 +66,7 @@ items:
   kind: Topology
   metadata:
     name: r2
+    namespace: "mlink"
   spec: 
     links:
     - uid: 1
@@ -114,6 +121,7 @@ items:
   kind: Topology
   metadata:
     name: r3
+    namespace: "mlink"
   spec: 
     links:
     - uid: 5
@@ -168,6 +176,7 @@ items:
   kind: Pod
   metadata:
     name: r1
+    namespace: "mlink"
     labels:
       test: 3node-mlink
   spec: 
@@ -179,6 +188,7 @@ items:
   kind: Pod
   metadata:
     name: r2
+    namespace: "mlink"
     labels:
       test: 3node-mlink
   spec: 
@@ -190,6 +200,7 @@ items:
   kind: Pod
   metadata:
     name: r3
+    namespace: "mlink"
     labels:
       test: 3node-mlink
   spec: 
