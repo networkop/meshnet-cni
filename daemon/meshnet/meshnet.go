@@ -2,7 +2,7 @@ package meshnet
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -15,12 +15,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/reflection"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 
 	topologyclientv1 "github.com/networkop/meshnet-cni/api/clientset/v1beta1"
+	"github.com/networkop/meshnet-cni/utils/wireutil"
 
 	mpb "github.com/networkop/meshnet-cni/daemon/proto/meshnet/v1beta1"
 )
@@ -34,12 +36,13 @@ type Meshnet struct {
 	mpb.UnimplementedLocalServer
 	mpb.UnimplementedRemoteServer
 	mpb.UnimplementedWireProtocolServer
-	config  Config
-	kClient kubernetes.Interface
-	tClient topologyclientv1.Interface
-	rCfg    *rest.Config
-	s       *grpc.Server
-	lis     net.Listener
+	config         Config
+	kClient        kubernetes.Interface
+	tClient        topologyclientv1.Interface
+	GWireDynClient *dynamic.DynamicClient
+	rCfg           *rest.Config
+	s              *grpc.Server
+	lis            net.Listener
 }
 
 var mnetdLogger *log.Entry = nil
@@ -59,6 +62,7 @@ func restConfig() (*rest.Config, error) {
 		mnetdLogger.Infof("Falling back to kubeconfig: %q", kubecfg)
 		rCfg, err = clientcmd.BuildConfigFromFlags("", kubecfg)
 		if err != nil {
+			mnetdLogger.Infof("error in Falling back to kubeconfig: %v", err)
 			return nil, err
 		}
 	}
@@ -78,6 +82,11 @@ func New(cfg Config) (*Meshnet, error) {
 	if err != nil {
 		return nil, err
 	}
+	gwireDynClient, err := dynamic.NewForConfig(rCfg)
+	if err != nil {
+		return nil, err
+	}
+
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
 	if err != nil {
 		return nil, err
@@ -87,19 +96,20 @@ func New(cfg Config) (*Meshnet, error) {
 	// much of log that does not help in debugging and K8S does log rotation very frequently.
 	var svr *grpc.Server
 	lnkTyp := os.Getenv("INTER_NODE_LINK_TYPE")
-	if lnkTyp == "GRPC" { //+++rev: use the constant INTER_NODE_LINK_GRPC form plugin code. There need to be some shared constants between plugin and daemon.
+	if lnkTyp == wireutil.INTER_NODE_LINK_GRPC {
 		svr = grpc.NewServer(cfg.GRPCOpts...)
 	} else {
 		svr = newServerWithLogging(cfg.GRPCOpts...)
 	}
 
 	m := &Meshnet{
-		config:  cfg,
-		rCfg:    rCfg,
-		kClient: kClient,
-		tClient: tClient,
-		lis:     lis,
-		s:       svr,
+		config:         cfg,
+		rCfg:           rCfg,
+		kClient:        kClient,
+		tClient:        tClient,
+		GWireDynClient: gwireDynClient,
+		lis:            lis,
+		s:              svr,
 	}
 	mpb.RegisterLocalServer(m.s, m)
 	mpb.RegisterRemoteServer(m.s, m)
@@ -107,9 +117,9 @@ func New(cfg Config) (*Meshnet, error) {
 	reflection.Register(m.s)
 
 	// After server is registered, reduce logging if link type is GRPC
-	if lnkTyp == "GRPC" { //+++rev: use the constant INTER_NODE_LINK_GRPC form plugin code. There need to be some shared constants between plugin and daemon.
+	if lnkTyp == wireutil.INTER_NODE_LINK_GRPC {
 		// Stop all Info, Warning, Error
-		grpclog.SetLoggerV2(grpclog.NewLoggerV2WithVerbosity(ioutil.Discard, ioutil.Discard, ioutil.Discard, 0))
+		grpclog.SetLoggerV2(grpclog.NewLoggerV2WithVerbosity(io.Discard, io.Discard, io.Discard, 0))
 		// see Error/Fatal, but opt out on Info
 		//grpclog.SetLoggerV2(grpclog.NewLoggerV2WithVerbosity(ioutil.Discard, ioutil.Discard, os.Stderr, 0))
 		mnetdLogger.Infof("Enabled GRPC logging for Error and Fatal only. Disabled Info & Warning logs.")

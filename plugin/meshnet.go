@@ -24,16 +24,16 @@ import (
 )
 
 const (
-	vxlanBase             = 5000
-	defaultPort           = "51111"
-	localhost             = "localhost"
-	localDaemon           = localhost + ":" + defaultPort
-	macvlanMode           = netlink.MACVLAN_MODE_BRIDGE
-	INTER_NODE_LINK_VXLAN = "VXLAN"
-	INTER_NODE_LINK_GRPC  = "GRPC"
+	vxlanBase   = 5000
+	localhost   = "localhost"
+	macvlanMode = netlink.MACVLAN_MODE_BRIDGE
 )
 
-var interNodeLinkType = INTER_NODE_LINK_VXLAN
+var (
+	localDaemon = localhost + ":" + fmt.Sprintf("%d", wireutil.GRPCDefaultPort)
+)
+
+var interNodeLinkType = wireutil.INTER_NODE_LINK_VXLAN
 
 type netConf struct {
 	types.NetConf
@@ -87,40 +87,41 @@ func loadConf(bytes []byte) (*netConf, *current.Result, error) {
 // when IP and Interface both are present then Interface is going to take preference
 // nodeIntf is specified by the user and it's not auto discovered. The user has to be careful that the peer is reachable though this interface otherwise, VxLAN may not work.
 // daemonset.yaml meshnet container env required for host_intf override
-//          env:
-//            - name: HOST_INTF
-//   		value: breth2
+//
+//	       env:
+//	         - name: HOST_INTF
+//			value: breth2
 func getVxlanSource(nodeIP string, nodeIntf string) (string, string, error) {
-    if nodeIntf == "" && nodeIP == "" {
-        return "", "", fmt.Errorf("meshnetd provided no HOST_IP address: %s or HOST_INTF: %s", nodeIP, nodeIntf)
-    }
-    nIP := net.ParseIP(nodeIP)
-    if nIP == nil && nodeIntf == "" {
-        return "", "", fmt.Errorf("parsing failed for meshnetd provided no HOST_IP address: %s and node HOST_INTF: %s", nodeIP, nodeIntf)
-    }
-    ifaces, _ := net.Interfaces()
-    for _, i := range ifaces {
-        addrs, _ := i.Addrs()
-        for _, a := range addrs {
-            var ip net.IP
-            switch v := a.(type) {
-            case *net.IPNet:
-                ip = v.IP
-            case *net.IPAddr:
-                ip = v.IP
-            }
-            if nodeIntf != "" {
-               if i.Name == nodeIntf {
-                   return ip.String(), nodeIntf, nil
-               }
-            }
-            if nIP != nil && nIP.Equal(ip) {
-                log.Infof("Found iface %s for address %s", i.Name, nodeIP)
-                return nodeIP, i.Name, nil
-            }
-        }
-    }
-    return "", "", fmt.Errorf("no iface found for address %s", nodeIP)
+	if nodeIntf == "" && nodeIP == "" {
+		return "", "", fmt.Errorf("meshnetd provided no HOST_IP address: %s or HOST_INTF: %s", nodeIP, nodeIntf)
+	}
+	nIP := net.ParseIP(nodeIP)
+	if nIP == nil && nodeIntf == "" {
+		return "", "", fmt.Errorf("parsing failed for meshnetd provided no HOST_IP address: %s and node HOST_INTF: %s", nodeIP, nodeIntf)
+	}
+	ifaces, _ := net.Interfaces()
+	for _, i := range ifaces {
+		addrs, _ := i.Addrs()
+		for _, a := range addrs {
+			var ip net.IP
+			switch v := a.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if nodeIntf != "" {
+				if i.Name == nodeIntf {
+					return ip.String(), nodeIntf, nil
+				}
+			}
+			if nIP != nil && nIP.Equal(ip) {
+				log.Infof("Found iface %s for address %s", i.Name, nodeIP)
+				return nodeIP, i.Name, nil
+			}
+		}
+	}
+	return "", "", fmt.Errorf("no iface found for address %s", nodeIP)
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -154,7 +155,7 @@ func makeVxlan(srcIntf string, peerIP string, idx int64) *koko.VxLan {
 }
 
 // -------------------------------------------------------------------------------------------------
-// Adds interfaces to a POD
+// Adds interfaces to a POD. the POD name and the POD Namespace is passed as arguments.
 func cmdAdd(args *skel.CmdArgs) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -170,7 +171,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err := types.LoadArgs(args.Args, &cniArgs); err != nil {
 		return err
 	}
-	log.Infof("Processing ADD POD %s in namespace %s", cniArgs.K8S_POD_NAME, cniArgs.K8S_POD_NAMESPACE)
+	log.Infof("Processing ADD POD %s in namespace %s, container_id %s", string(cniArgs.K8S_POD_NAME), string(cniArgs.K8S_POD_NAMESPACE), string(cniArgs.K8S_POD_INFRA_CONTAINER_ID))
+	defer log.Infof("DONE > Processing ADD POD %s in namespace %s, container_id %s", string(cniArgs.K8S_POD_NAME), string(cniArgs.K8S_POD_NAMESPACE), string(cniArgs.K8S_POD_INFRA_CONTAINER_ID))
 
 	log.Infof("Attempting to connect to local meshnet daemon")
 	conn, err := grpc.Dial(localDaemon, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -182,7 +184,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	meshnetClient := mpb.NewLocalClient(conn)
 
-	log.Infof("Add: Retrieving local pod information from meshnet daemon")
+	log.Infof("Add[%s]: Retrieving local pod information from meshnet daemon", string(cniArgs.K8S_POD_NAME))
 	localPod, err := meshnetClient.Get(ctx, &mpb.PodQuery{
 		Name:   string(cniArgs.K8S_POD_NAME),
 		KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
@@ -203,14 +205,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 	localPod.NetNs = args.Netns
 	localPod.SrcIp = srcIP
 	localPod.ContainerId = args.ContainerID
-	log.Infof("Add: Setting pod alive status on meshnet daemon")
+	log.Infof("Add[%s]: Setting pod alive status on meshnet daemon", string(cniArgs.K8S_POD_NAME))
 	ok, err := meshnetClient.SetAlive(ctx, localPod)
 	if err != nil || !ok.Response {
-		log.Errorf("Add: Failed to set pod alive status")
+		log.Errorf("Add[%s]: Failed to set pod alive status", string(cniArgs.K8S_POD_NAME))
 		return err
 	}
 
-	log.Info("Add: Starting to traverse all links")
+	log.Infof("Add[%s]: Starting to traverse all links", string(cniArgs.K8S_POD_NAME))
 	for _, link := range localPod.Links { // Iterate over each link of the local pod
 		// Build koko's veth struct for local intf
 		myVeth, err := makeVeth(args.Netns, link.LocalIntf, link.LocalIp)
@@ -229,32 +231,32 @@ func cmdAdd(args *skel.CmdArgs) error {
 				log.Errorf("Failed to add macvlan interface")
 				return err
 			}
-			log.Infof("macvlan interfacee %s@%s has been added", link.LocalIntf, link.PeerIntf)
+			log.Infof("macvlan interface %s@%s has been added", link.LocalIntf, link.PeerIntf)
 			continue
 		}
 
 		// Initialising peer pod's metadata
-		log.Infof("Add: Pod %s is retrieving peer pod %s information from meshnet daemon", cniArgs.K8S_POD_NAME, link.PeerPod)
+		log.Infof("Add[%s]: retrieving peer pod %s information from meshnet daemon", string(cniArgs.K8S_POD_NAME), link.PeerPod)
 		peerPod, err := meshnetClient.Get(ctx, &mpb.PodQuery{
 			Name:   link.PeerPod,
 			KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
 		})
 		if err != nil {
-			log.Errorf("Add: Failed to retrieve peer pod %s:%s topology", string(cniArgs.K8S_POD_NAMESPACE), link.PeerPod)
+			log.Errorf("Add[%s]: Failed to retrieve peer pod %s:%s topology", string(cniArgs.K8S_POD_NAME), string(cniArgs.K8S_POD_NAMESPACE), link.PeerPod)
 			return err
 		}
 
 		isAlive := peerPod.SrcIp != "" && peerPod.NetNs != ""
-		log.Infof("Add: Is peer pod %s alive?: %t", peerPod.Name, isAlive)
+		log.Infof("Add[%s]: Is peer pod %s alive?: %t", string(cniArgs.K8S_POD_NAME), peerPod.Name, isAlive)
 
 		if isAlive { // This means we're coming up AFTER our peer so things are pretty easy
-			log.Infof("Add: Peer pod %s is alive", peerPod.Name)
+			log.Infof("Add[%s]: Peer pod %s is alive", string(cniArgs.K8S_POD_NAME), peerPod.Name)
 			if peerPod.SrcIp == localPod.SrcIp { // This means we're on the same host
-				log.Infof("Add: %s and %s are on the same host", localPod.Name, peerPod.Name)
+				log.Infof("Add[%s]: %s and %s are on the same host", string(cniArgs.K8S_POD_NAME), localPod.Name, peerPod.Name)
 				// Creating koko's Veth struct for peer intf
 				peerVeth, err := makeVeth(peerPod.NetNs, link.PeerIntf, link.PeerIp)
 				if err != nil {
-					log.Errorf("Add: Failed to build koko Veth struct")
+					log.Errorf("Add[%s]: Failed to build koko Veth struct", string(cniArgs.K8S_POD_NAME))
 					return err
 				}
 
@@ -262,77 +264,78 @@ func cmdAdd(args *skel.CmdArgs) error {
 				iExist, _ := koko.IsExistLinkInNS(myVeth.NsName, myVeth.LinkName)
 				pExist, _ := koko.IsExistLinkInNS(peerVeth.NsName, peerVeth.LinkName)
 
-				log.Infof("Does the link already exist? Local:%t, Peer:%t", iExist, pExist)
+				log.Infof("Add[%s]: Does the link already exist? Local:%t, Peer:%t", string(cniArgs.K8S_POD_NAME), iExist, pExist)
 				if iExist && pExist { // If both link exist, we don't need to do anything
-					log.Info("Both interfaces already exist in namespace")
+					log.Infof("Add[%s]: Both interfaces already exist in namespace", string(cniArgs.K8S_POD_NAME))
 				} else if !iExist && pExist { // If only peer link exists, we need to destroy it first
-					log.Info("Only peer link exists, removing it first")
+					log.Infof("Add[%s]: Only peer link exists, removing it first", string(cniArgs.K8S_POD_NAME))
 					if err := peerVeth.RemoveVethLink(); err != nil {
-						log.Errorf("Failed to remove a stale interface %s of my peer %s", peerVeth.LinkName, link.PeerPod)
+						log.Errorf("Add[%s]: Failed to remove a stale interface %s of my peer %s", string(cniArgs.K8S_POD_NAME), peerVeth.LinkName, link.PeerPod)
 						return err
 					}
-					log.Infof("Adding the new veth link to both pods")
+					log.Infof("Add[%s]: Adding the new veth link to both pods", string(cniArgs.K8S_POD_NAME))
 					if err = koko.MakeVeth(*myVeth, *peerVeth); err != nil {
-						log.Errorf("Error creating VEth pair after peer link remove: %s", err)
+						log.Errorf("Add[%s]: Error creating VEth pair after peer link remove: %s", string(cniArgs.K8S_POD_NAME), err)
 						return err
 					}
 				} else if iExist && !pExist { // If only local link exists, we need to destroy it first
-					log.Infof("Only local link exists, removing it first")
+					log.Infof("Add[%s]: Only local link exists, removing it first", string(cniArgs.K8S_POD_NAME))
 					if err := myVeth.RemoveVethLink(); err != nil {
-						log.Errorf("Failed to remove a local stale VEth interface %s for pod %s", myVeth.LinkName, localPod.Name)
+						log.Errorf("Add[%s]: Failed to remove a local stale VEth interface %s for pod %s", string(cniArgs.K8S_POD_NAME), myVeth.LinkName, localPod.Name)
 						return err
 					}
-					log.Infof("Adding the new veth link to both pods")
+					log.Infof("Add[%s]: Adding the new veth link to both pods", string(cniArgs.K8S_POD_NAME))
 					if err = koko.MakeVeth(*myVeth, *peerVeth); err != nil {
-						log.Errorf("Error creating VEth pair after local link remove: %s", err)
+						log.Errorf("Add[%s]: Error creating VEth pair after local link remove: %s", string(cniArgs.K8S_POD_NAME), err)
 						return err
 					}
 				} else { // if neither link exists, we have two options
-					log.Infof("Neither link exists. Checking if we've been skipped")
+					log.Infof("Add[%s]: Neither link exists. Checking if we've been skipped for interface %s (link id %d)", string(cniArgs.K8S_POD_NAME), link.LocalIntf, link.Uid)
 					isSkipped, err := meshnetClient.IsSkipped(ctx, &mpb.SkipQuery{
 						Pod:    localPod.Name,
 						Peer:   peerPod.Name,
+						LinkId: link.Uid,
 						KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
 					})
 					if err != nil {
-						log.Errorf("Failed to read skipped status from our peer")
+						log.Errorf("Add[%s]: Failed to read skipped status from our peer", string(cniArgs.K8S_POD_NAME))
 						return err
 					}
-					log.Infof("Have we been skipped by our peer %s? %t", peerPod.Name, isSkipped.Response)
+					log.Infof("Add[%s]: Have we been skipped for %s (link id %d) by our peer %s? %t", string(cniArgs.K8S_POD_NAME), link.LocalIntf, link.Uid, peerPod.Name, isSkipped.Response)
 
 					// Comparing names to determine higher priority
 					higherPrio := localPod.Name > peerPod.Name
-					log.Infof("DO we have a higher priority? %t", higherPrio)
+					log.Infof("Add[%s]: Do we have a higher priority? %t", string(cniArgs.K8S_POD_NAME), higherPrio)
 
 					if isSkipped.Response || higherPrio { // If peer POD skipped us (booted before us) or we have a higher priority
-						log.Infof("Peer POD has skipped us or we have a higher priority")
+						log.Infof("Add[%s]: Peer POD has skipped us for %s (link id %d) or we have a higher priority", string(cniArgs.K8S_POD_NAME), link.LocalIntf, link.Uid)
 						if err = koko.MakeVeth(*myVeth, *peerVeth); err != nil {
-							log.Errorf("Error when creating a new VEth pair with koko: %s", err)
-							log.Infof("MY VETH STRUCT: %+v", spew.Sdump(myVeth))
-							log.Infof("PEER STRUCT: %+v", spew.Sdump(peerVeth))
+							log.Errorf("Add[%s]: Error when creating a new VEth pair with koko: %s", string(cniArgs.K8S_POD_NAME), err)
+							log.Infof("Add[%s]: MY VETH STRUCT: %+v", string(cniArgs.K8S_POD_NAME), spew.Sdump(myVeth))
+							log.Infof("Add[%s]: PEER STRUCT: %+v", string(cniArgs.K8S_POD_NAME), spew.Sdump(peerVeth))
 							return err
 						}
 					} else { // peerPod has higherPrio and hasn't skipped us
 						// In this case we do nothing, since the pod with a higher IP is supposed to connect veth pair
-						log.Infof("Doing nothing, expecting peer pod %s to connect veth pair", peerPod.Name)
+						log.Infof("Add[%s]: Doing nothing, expecting peer pod %s to connect veth pair", string(cniArgs.K8S_POD_NAME), peerPod.Name)
 						continue
 					}
 				}
 				if err := wireutil.SetTxChecksumOff(myVeth.LinkName, myVeth.NsName); err != nil {
-					log.Errorf("Error in setting tx checksum-off on interface %s, ns %s, pod %s: %v", myVeth.LinkName, myVeth.NsName, localPod.Name, err)
+					log.Errorf("Add[%s]: Error in setting tx checksum-off on interface %s, ns %s, pod %s: %v", string(cniArgs.K8S_POD_NAME), myVeth.LinkName, myVeth.NsName, localPod.Name, err)
 					// not returning
 				}
 				if err := wireutil.SetTxChecksumOff(peerVeth.LinkName, peerVeth.NsName); err != nil {
-					log.Errorf("Error in setting tx checksum-off on interface %s, ns %s, pod %s: %v", peerVeth.LinkName, peerVeth.NsName, peerPod.Name, err)
+					log.Errorf("Add[%s]: Error in setting tx checksum-off on interface %s, ns %s, pod %s: %v", string(cniArgs.K8S_POD_NAME), peerVeth.LinkName, peerVeth.NsName, peerPod.Name, err)
 					// not returning
 				}
 
 			} else { // This means we're on different hosts
-				log.Infof("Add: %s@%s and %s@%s are on different hosts", localPod.Name, localPod.SrcIp, peerPod.Name, peerPod.SrcIp)
-				if interNodeLinkType == INTER_NODE_LINK_GRPC {
+				log.Infof("Add[%s]: %s@%s and %s@%s are on different hosts", string(cniArgs.K8S_POD_NAME), localPod.Name, localPod.SrcIp, peerPod.Name, peerPod.SrcIp)
+				if interNodeLinkType == wireutil.INTER_NODE_LINK_GRPC {
 					err = CreatGRPCChan(link, localPod, peerPod, meshnetClient, &cniArgs, ctx)
 					if err != nil {
-						log.Errorf("Add: !! Failed to create grpc wire. err: %v", err)
+						log.Errorf("Add[%s]: !! Failed to create grpc wire. err: %v", string(cniArgs.K8S_POD_NAME), err)
 						return err
 					}
 					continue
@@ -342,14 +345,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 				// Checking if interface already exists
 				iExist, _ := koko.IsExistLinkInNS(myVeth.NsName, myVeth.LinkName)
 				if iExist { // If VXLAN intf exists, we need to remove it first
-					log.Infof("VXLAN intf already exists, removing it first")
+					log.Infof("Add[%s]: VXLAN intf already exists, removing it first", string(cniArgs.K8S_POD_NAME))
 					if err := myVeth.RemoveVethLink(); err != nil {
-						log.Infof("Failed to remove a local stale VXLAN interface %s for pod %s", myVeth.LinkName, localPod.Name)
+						log.Infof("Add[%s], Failed to remove a local stale VXLAN interface %s for pod %s", string(cniArgs.K8S_POD_NAME), myVeth.LinkName, localPod.Name)
 						return err
 					}
 				}
 				if err = koko.MakeVxLan(*myVeth, *vxlan); err != nil {
-					log.Infof("Error when creating a Vxlan interface with koko: %s", err)
+					log.Infof("Add[%s]: Error when creating a Vxlan interface with koko: %s", string(cniArgs.K8S_POD_NAME), err)
 					return err
 				}
 
@@ -364,34 +367,35 @@ func cmdAdd(args *skel.CmdArgs) error {
 					NodeIntf: srcIntf,
 				}
 
-				url := fmt.Sprintf("%s:%s", peerPod.SrcIp, defaultPort)
-				log.Infof("Trying to do a remote update on %s", url)
+				url := fmt.Sprintf("%s:%d", peerPod.SrcIp, wireutil.GRPCDefaultPort)
+				log.Infof("Add[%s]: Trying to do a remote update on %s", string(cniArgs.K8S_POD_NAME), url)
 
 				remote, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
 				if err != nil {
-					log.Infof("Failed to dial remote gRPC url %s", url)
+					log.Infof("Add[%s]: Failed to dial remote gRPC url %s", string(cniArgs.K8S_POD_NAME), url)
 					return err
 				}
 				remoteClient := mpb.NewRemoteClient(remote)
 				ok, err := remoteClient.Update(ctx, payload)
 				if err != nil || !ok.Response {
-					log.Infof("Failed to do a remote update")
+					log.Infof("Add[%s]: Failed to do a remote update", string(cniArgs.K8S_POD_NAME))
 					return err
 				}
-				log.Infof("Successfully updated remote meshnet daemon")
+				log.Infof("Add[%s]: Successfully updated remote meshnet daemon", string(cniArgs.K8S_POD_NAME))
 			}
 		} else { // This means that our peer pod hasn't come up yet
 			// Since there's no way of telling if our peer is going to be on this host or another,
 			// the only option is to do nothing, assuming that the peer POD will do all the plumbing when it comes up
-			log.Infof("Add: Peer pod %s isn't alive yet, continuing", peerPod.Name)
+			log.Infof("Add[%s]: Peer pod %s@%s (link id %d) isn't alive yet, continuing", string(cniArgs.K8S_POD_NAME), peerPod.Name, link.PeerIntf, link.Uid)
 			// Here we need to set the skipped flag so that our peer can configure VEth interface when it comes up later
 			ok, err := meshnetClient.Skip(ctx, &mpb.SkipQuery{
 				Pod:    localPod.Name,
 				Peer:   peerPod.Name,
+				LinkId: link.Uid,
 				KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
 			})
 			if err != nil || !ok.Response {
-				log.Errorf("Add: Failed to set a skipped flag on peer %s", peerPod.Name)
+				log.Errorf("Add[%s]: Failed to set a skipped flag on peer %s", string(cniArgs.K8S_POD_NAME), peerPod.Name)
 				return err
 			}
 		}
@@ -410,7 +414,9 @@ func cmdDel(args *skel.CmdArgs) error {
 	if err := types.LoadArgs(args.Args, &cniArgs); err != nil {
 		return err
 	}
-	log.Infof("Processing DEL request: %s", cniArgs.K8S_POD_NAME)
+	log.Infof("========> Processing DEL POD %s in namespace %s, container_id %s", string(cniArgs.K8S_POD_NAME), string(cniArgs.K8S_POD_NAMESPACE), cniArgs.K8S_POD_INFRA_CONTAINER_ID)
+	defer log.Infof("DONE ========>  Processing DEL POD %s in namespace %s, container_id %s", string(cniArgs.K8S_POD_NAME), string(cniArgs.K8S_POD_NAMESPACE), cniArgs.K8S_POD_INFRA_CONTAINER_ID)
+
 	log.WithFields(log.Fields{
 		"args": fmt.Sprintf("%+v", args),
 	}).Info("DEL request arguments")
@@ -445,9 +451,9 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	/* Tell daemon to close the grpc tunnel for this pod netns (if any) */
-	log.Infof("Del: Remove the pod's grpc tunnel, if any")
+	log.Infof("Del: Retrieving pod's metadata from meshnet daemon")
 	wireDef := mpb.WireDef{
-		KubeNs:       string(cniArgs.K8S_POD_NAMESPACE),
+		TopoNs:       string(cniArgs.K8S_POD_NAMESPACE),
 		LocalPodName: string(cniArgs.K8S_POD_NAME),
 	}
 
@@ -472,7 +478,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		linkType := "veth"
 		// Initialising peer pod's metadata. Peer pod information is needed to determine if a link is of type GRPC or VxLAN.
 		// For GRPC link type there is some addtional cleanup work nedd to be perfromed.
-		log.Infof("Del: Pod %s is retrieving peer pod %s information from meshnet daemon", cniArgs.K8S_POD_NAME, link.PeerPod)
+		log.Infof("Del: Pod %s is retrieving peer pod %s information from meshnet daemon", string(cniArgs.K8S_POD_NAME), link.PeerPod)
 		peerPod, _ := meshnetClient.Get(ctx, &mpb.PodQuery{
 			Name:   link.PeerPod, // getting peer pod detail.
 			KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
@@ -480,7 +486,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 		if peerPod.SrcIp != localPodSrcIp {
 			// they are on different hosts
-			if interNodeLinkType == INTER_NODE_LINK_GRPC {
+			if interNodeLinkType == wireutil.INTER_NODE_LINK_GRPC {
 				// for this link bring the grpc wire down
 				err = MakeGRPCChanDown(link, localPod, peerPod, ctx)
 				if err != nil {
@@ -507,10 +513,11 @@ func cmdDel(args *skel.CmdArgs) error {
 		}
 
 		// Setting reversed skipped flag so that this pod will try to connect veth pair on restart
-		log.Infof("Del: Setting skip-reverse flag on peer %s", link.PeerPod)
+		log.Infof("Del: Setting skip-reverse flag on peer %s@%s(link id %d) for local interface %s", link.PeerPod, link.PeerIntf, link.Uid, link.LocalIntf)
 		ok, err := meshnetClient.SkipReverse(ctx, &mpb.SkipQuery{
 			Pod:    localPod.Name,
 			Peer:   link.PeerPod,
+			LinkId: link.Uid,
 			KubeNs: string(cniArgs.K8S_POD_NAMESPACE),
 		})
 		if err != nil || !ok.Response {
@@ -552,12 +559,16 @@ func main() {
 		log.Errorf("failed to run meshnet cni: %v", e.Print())
 		retCode = 1
 	}
-	log.Infof("meshnet cni call successful")
+	log.Infof("K8S invoked meshnet cni")
 	fp.Close()
 	os.Exit(retCode)
 }
 
 func cmdGet(args *skel.CmdArgs) error {
+	cniArgs := k8sArgs{}
+	if err := types.LoadArgs(args.Args, &cniArgs); err != nil {
+		return err
+	}
 	log.Infof("cmdGet called: %+v", args)
 	return fmt.Errorf("not implemented")
 }

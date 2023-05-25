@@ -7,5 +7,6 @@ resources:
 - namespace.yaml
 - serviceaccount.yaml
 - crd.yaml
+- gwire_crd.yaml
 - rbac.yaml
 - daemonset.yaml
