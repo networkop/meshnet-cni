@@ -22,17 +22,14 @@ require (
 	sigs.k8s.io/controller-runtime v0.14.5
 )
 
-require google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.3.0 // indirect
-
 require (
 	github.com/Microsoft/go-winio v0.4.11 // indirect
-	github.com/docker/distribution v2.8.0+incompatible // indirect
+	github.com/docker/distribution v2.8.2+incompatible // indirect
 	github.com/docker/docker v0.0.0-20181024220401-bc4c1c238b55 // indirect
 	github.com/docker/go-connections v0.0.0-20180228141015-7395e3f8aa16 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
-	github.com/go-errors/errors v1.4.2
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.20.0 // indirect
