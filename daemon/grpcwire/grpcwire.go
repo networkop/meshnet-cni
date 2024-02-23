@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strings"
+	"strconv"
 	"sync"
 
 	"github.com/google/gopacket"
@@ -303,7 +303,7 @@ func RecvFrmLocalPodThread(wire *GRPCWire, locIfNm string) error {
 	defaultPort := wireutil.GRPCDefaultPort
 	pktBuffSz := int32(1024 * 64 * 10) //keep buffer for MAX 10 64K frames
 
-	url := strings.TrimSpace(fmt.Sprintf("%s:%d", wire.PeerNodeIP, defaultPort))
+	url := net.JoinHostPort(wire.PeerNodeIP, strconv.FormatInt(int64(defaultPort), 10))
 	/* Utilizing google gopacket for polling for packets from the node. This seems to be the
 	   simplest way to get all packets.
 	   As an alternative to google gopacket(pcap), a socket based implementation is possible.
