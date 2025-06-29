@@ -1,11 +1,12 @@
----
 apiVersion: kind.x-k8s.io/v1alpha4
 kind: Cluster
+networking:
+  ipFamily: ipv6
 nodes:
 - role: control-plane
 - role: worker
 - role: worker
-- role: worker
+# from meshnet
 kubeadmConfigPatches:
 - |
   apiVersion: kubelet.config.k8s.io/v1beta1
@@ -13,3 +14,6 @@ kubeadmConfigPatches:
   metadata:
     name: config
   maxPods: 253
+  allowedUnsafeSysctls:
+  - "net.ipv4.*"
+  - "net.ipv6.*"

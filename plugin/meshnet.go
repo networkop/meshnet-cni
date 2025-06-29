@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"strconv"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -30,7 +31,7 @@ const (
 )
 
 var (
-	localDaemon = localhost + ":" + fmt.Sprintf("%d", wireutil.GRPCDefaultPort)
+	localDaemon = net.JoinHostPort(localhost, strconv.FormatInt(int64(wireutil.GRPCDefaultPort), 10))
 )
 
 var interNodeLinkType = wireutil.INTER_NODE_LINK_VXLAN
@@ -367,7 +368,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 					NodeIntf: srcIntf,
 				}
 
-				url := fmt.Sprintf("%s:%d", peerPod.SrcIp, wireutil.GRPCDefaultPort)
+				url := net.JoinHostPort(peerPod.SrcIp, strconv.FormatInt(int64(wireutil.GRPCDefaultPort), 10))
 				log.Infof("Add[%s]: Trying to do a remote update on %s", string(cniArgs.K8S_POD_NAME), url)
 
 				remote, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))

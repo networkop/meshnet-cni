@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
+	"strconv"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -150,8 +150,7 @@ func CreatGRPCChan(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, localCli
 
 	/* Dial the remote peer to create the remote end of the grpc tunnel. */
 
-	url := fmt.Sprintf("%s:%d", peerPod.SrcIp, wireutil.GRPCDefaultPort)
-	url = strings.TrimSpace(url)
+	url := net.JoinHostPort(peerPod.SrcIp, strconv.FormatInt(int64(wireutil.GRPCDefaultPort), 10))
 	remote, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("Add-GRPC[%s]: creating GRPC wire: failed to dial remote gRPC url %s", localPod.Name, url)
@@ -261,8 +260,7 @@ func MakeGRPCChanDown(link *mpb.Link, localPod *mpb.Pod, peerPod *mpb.Pod, ctx c
 
 	/* Dial the remote peer to bring down the remote grpc wire end */
 
-	url := fmt.Sprintf("%s:%d", peerPod.SrcIp, wireutil.GRPCDefaultPort)
-	url = strings.TrimSpace(url)
+	url := net.JoinHostPort(peerPod.SrcIp, strconv.FormatInt(int64(wireutil.GRPCDefaultPort), 10))
 	remote, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("MakeGRPCChanDown failed to dial remote gRPC url %s", url)

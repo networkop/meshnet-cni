@@ -15,4 +15,4 @@ resources:
 - ../../base/
 images:
 - name: networkop/meshnet
-  newTag: 12d9882-dirty
+  newTag: 88dc099-dirty
